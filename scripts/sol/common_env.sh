@@ -78,11 +78,25 @@ sol_deactivate_base_if_needed() {
   fi
 }
 
+sol_normalize_gpu_visibility_env() {
+  if [[ -n "${CUDA_VISIBLE_DEVICES:-}" ]]; then
+    if [[ -n "${ROCR_VISIBLE_DEVICES:-}" ]]; then
+      sol_msg "Unsetting ROCR_VISIBLE_DEVICES for CUDA-based verl execution."
+      unset ROCR_VISIBLE_DEVICES
+    fi
+    if [[ -n "${HIP_VISIBLE_DEVICES:-}" ]]; then
+      sol_msg "Unsetting HIP_VISIBLE_DEVICES for CUDA-based verl execution."
+      unset HIP_VISIBLE_DEVICES
+    fi
+  fi
+}
+
 sol_activate_env() {
   sol_load_mamba
   sol_deactivate_base_if_needed
   # shellcheck disable=SC1091
   source activate "${SOL_ENV_NAME}" || sol_fail "Could not activate Mamba env '${SOL_ENV_NAME}'. Run scripts/sol/create_env.sh first."
+  sol_normalize_gpu_visibility_env
 }
 
 sol_require_slurm_allocation() {
