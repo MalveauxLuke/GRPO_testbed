@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOL_COMMON_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="${PROJECT_ROOT:-$(cd "${SOL_COMMON_ENV_DIR}/../.." && pwd)}"
+
+export PROJECT_ROOT
+export VERL_REF="${VERL_REF:-v0.7.1}"
+export SOL_ENV_NAME="${SOL_ENV_NAME:-verl-grpo-sol}"
+export SOL_PROJECT_NAME="${SOL_PROJECT_NAME:-asu_sol_upstream_verl_grpo}"
+export SOL_ACCOUNT="${SOL_ACCOUNT:-}"
+
+export EXTERNAL_ROOT="${EXTERNAL_ROOT:-${PROJECT_ROOT}/external}"
+export UPSTREAM_VERL_DIR="${UPSTREAM_VERL_DIR:-${EXTERNAL_ROOT}/verl}"
+
+export SCRATCH_ROOT="${SCRATCH_ROOT:-/scratch/${USER}/verl-grpo}"
+export DATA_ROOT="${DATA_ROOT:-${SCRATCH_ROOT}/data}"
+export GSM8K_DIR="${GSM8K_DIR:-${DATA_ROOT}/gsm8k}"
+export OUTPUT_ROOT="${OUTPUT_ROOT:-${SCRATCH_ROOT}/outputs}"
+export CHECKPOINT_ROOT="${CHECKPOINT_ROOT:-${SCRATCH_ROOT}/checkpoints}"
+export LOG_ROOT="${LOG_ROOT:-${SCRATCH_ROOT}/logs}"
+export RAY_TMPDIR="${RAY_TMPDIR:-${SCRATCH_ROOT}/ray}"
+export TMPDIR="${TMPDIR:-${SCRATCH_ROOT}/tmp}"
+export HF_HOME="${HF_HOME:-${SCRATCH_ROOT}/hf}"
+export HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-${SCRATCH_ROOT}/hf/datasets}"
+export HUGGINGFACE_HUB_CACHE="${HUGGINGFACE_HUB_CACHE:-${SCRATCH_ROOT}/hf/hub}"
+export TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-${SCRATCH_ROOT}/hf/transformers}"
+export VLLM_CACHE_ROOT="${VLLM_CACHE_ROOT:-${SCRATCH_ROOT}/vllm}"
+export WANDB_DIR="${WANDB_DIR:-${SCRATCH_ROOT}/wandb}"
+export PIP_CACHE_DIR="${PIP_CACHE_DIR:-${SCRATCH_ROOT}/pip-cache}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-${SCRATCH_ROOT}/xdg-cache}"
+export MAMBA_PKGS_DIRS="${MAMBA_PKGS_DIRS:-${SCRATCH_ROOT}/mamba-pkgs}"
+
+export PYTHONUNBUFFERED="${PYTHONUNBUFFERED:-1}"
+export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
+export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
+export VLLM_NO_USAGE_STATS="${VLLM_NO_USAGE_STATS:-1}"
+
+sol_msg() {
+  printf '[sol-setup] %s\n' "$*"
+}
+
+sol_fail() {
+  printf '[sol-setup] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+sol_timestamp() {
+  date +"%Y%m%d-%H%M%S"
+}
+
+sol_init_modules() {
+  if command -v module >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local init_file
+  for init_file in /etc/profile.d/modules.sh /etc/profile.d/lmod.sh /usr/share/lmod/lmod/init/bash; do
+    if [[ -f "${init_file}" ]]; then
+      # shellcheck disable=SC1090
+      source "${init_file}"
+      break
+    fi
+  done
+
+  command -v module >/dev/null 2>&1 || sol_fail "Could not initialize the module command. Load modules manually before rerunning."
+}
+
+sol_load_mamba() {
+  sol_init_modules
+  module load mamba/latest
+}
+
+sol_deactivate_base_if_needed() {
+  if [[ "${CONDA_DEFAULT_ENV:-}" == "base" ]]; then
+    # shellcheck disable=SC1091
+    source deactivate >/dev/null 2>&1 || true
+  fi
+}
+
+sol_activate_env() {
+  sol_load_mamba
+  sol_deactivate_base_if_needed
+  # shellcheck disable=SC1091
+  source activate "${SOL_ENV_NAME}" || sol_fail "Could not activate Mamba env '${SOL_ENV_NAME}'. Run scripts/sol/create_env.sh first."
+}
+
+sol_require_slurm_allocation() {
+  [[ -n "${SLURM_JOB_ID:-}" ]] || sol_fail "Run this from a Slurm compute allocation, for example: salloc -p lightwork -q public -t 02:00:00 -c 8"
+}
+
+sol_ensure_upstream_checkout() {
+  [[ -d "${UPSTREAM_VERL_DIR}/.git" ]] || sol_fail "Upstream verl checkout not found at ${UPSTREAM_VERL_DIR}. Run scripts/sol/clone_upstream_verl.sh first."
+}
+
+sol_ensure_runtime_dirs() {
+  mkdir -p \
+    "${EXTERNAL_ROOT}" \
+    "${DATA_ROOT}" \
+    "${GSM8K_DIR}" \
+    "${OUTPUT_ROOT}" \
+    "${CHECKPOINT_ROOT}" \
+    "${LOG_ROOT}" \
+    "${RAY_TMPDIR}" \
+    "${TMPDIR}" \
+    "${HF_HOME}" \
+    "${HF_DATASETS_CACHE}" \
+    "${HUGGINGFACE_HUB_CACHE}" \
+    "${TRANSFORMERS_CACHE}" \
+    "${VLLM_CACHE_ROOT}" \
+    "${WANDB_DIR}" \
+    "${PIP_CACHE_DIR}" \
+    "${XDG_CACHE_HOME}" \
+    "${MAMBA_PKGS_DIRS}"
+}
