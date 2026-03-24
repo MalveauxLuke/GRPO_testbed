@@ -12,7 +12,7 @@ sol_ensure_runtime_dirs
 sol_activate_env
 
 sol_msg "Prewarming Hugging Face caches for ${MODEL_NAME}."
-python3 - "${MODEL_NAME}" <<'PY'
+"$(sol_python)" - "${MODEL_NAME}" <<'PY'
 import sys
 import transformers
 

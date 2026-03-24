@@ -25,7 +25,7 @@ sol_msg "Starting short 1-GPU GRPO validation run."
 sol_msg "Run root: ${RUN_ROOT}"
 sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
 
-python3 -m verl.trainer.main_ppo \
+"$(sol_python)" -m verl.trainer.main_ppo \
   algorithm.adv_estimator=grpo \
   trainer.val_before_train=False \
   data.train_files="${GSM8K_DIR}/train.parquet" \

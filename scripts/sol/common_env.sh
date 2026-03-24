@@ -99,8 +99,20 @@ sol_activate_env() {
   sol_normalize_gpu_visibility_env
 }
 
+sol_python() {
+  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/python" ]]; then
+    printf '%s\n' "${CONDA_PREFIX}/bin/python"
+    return 0
+  fi
+  if command -v python >/dev/null 2>&1; then
+    command -v python
+    return 0
+  fi
+  sol_fail "Could not locate the active environment's python interpreter."
+}
+
 sol_require_slurm_allocation() {
-  [[ -n "${SLURM_JOB_ID:-}" ]] || sol_fail "Run this from a Slurm compute allocation, for example: salloc -p lightwork -q public -t 02:00:00 -c 8"
+  [[ -n "${SLURM_JOB_ID:-}" ]] || sol_fail "Run this from a Slurm compute allocation, for example: salloc -p lightwork -q public -t 02:00:00 -c 4"
 }
 
 sol_ensure_upstream_checkout() {

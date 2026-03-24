@@ -18,4 +18,4 @@ else
 fi
 
 sol_activate_env
-sol_msg "Python version inside '${SOL_ENV_NAME}': $(python3 --version)"
+sol_msg "Python version inside '${SOL_ENV_NAME}': $("$(sol_python)" --version)"

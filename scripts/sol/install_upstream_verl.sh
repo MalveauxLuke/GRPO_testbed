@@ -16,6 +16,6 @@ cd "${UPSTREAM_VERL_DIR}"
 
 sol_msg "Installing official upstream verl dependencies with vLLM-only settings."
 USE_MEGATRON=0 USE_SGLANG=0 bash scripts/install_vllm_sglang_mcore.sh
-python3 -m pip install --no-deps -e .
+"$(sol_python)" -m pip install --no-deps -e .
 
 sol_msg "Install finished."

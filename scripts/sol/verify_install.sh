@@ -8,7 +8,7 @@ source "${SCRIPT_DIR}/common_env.sh"
 sol_require_slurm_allocation
 sol_activate_env
 
-python3 - <<'PY'
+"$(sol_python)" - <<'PY'
 import importlib
 import importlib.metadata
 import sys
