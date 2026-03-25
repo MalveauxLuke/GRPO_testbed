@@ -6,8 +6,6 @@ if [[ -z "${BASH_VERSION:-}" ]]; then
   return 1 2>/dev/null || exit 1
 fi
 
-set -euo pipefail
-
 SOL_COMMON_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "${SOL_COMMON_ENV_DIR}/../.." && pwd)}"
 
@@ -51,7 +49,7 @@ sol_msg() {
 
 sol_fail() {
   printf '[sol-setup] ERROR: %s\n' "$*" >&2
-  exit 1
+  return 1 2>/dev/null || exit 1
 }
 
 sol_timestamp() {
