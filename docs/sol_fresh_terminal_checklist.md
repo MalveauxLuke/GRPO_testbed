@@ -63,6 +63,18 @@ If you need the Python env interactively, then run:
 sol_activate_env
 ```
 
+### VS Code Remote Terminals
+
+This workspace now includes a repo-local VS Code setting in [.vscode/settings.json](/Users/god/Documents/VERL_GRPO/.vscode/settings.json) that makes new Linux terminals open as login `bash`.
+
+That matters because [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh) is a Bash-oriented helper file. In normal daily VS Code use on SOL, opening a fresh integrated terminal in this workspace should therefore let you run:
+
+```bash
+source scripts/sol/common_env.sh
+```
+
+without first doing `exec bash -l`.
+
 ## 5. Decide Which Case You Are In
 
 ### Case A: First-Time Setup Or Missing Env

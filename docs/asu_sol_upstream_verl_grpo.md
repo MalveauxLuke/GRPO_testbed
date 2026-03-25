@@ -91,6 +91,8 @@ If `sol.asu.edu` does not resolve in your local DNS/VPN setup, `login.sol.rc.asu
 ssh <asurite>@login.sol.rc.asu.edu
 ```
 
+If you use VS Code Remote-SSH, this workspace now includes [.vscode/settings.json](/Users/god/Documents/VERL_GRPO/.vscode/settings.json) so new remote terminals default to login `bash`. That keeps [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh) sourceable in daily VS Code use without an extra shell hop.
+
 After sourcing [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh), you can activate the Mamba env interactively with:
 
 ```bash

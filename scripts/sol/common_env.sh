@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+
+if [[ -z "${BASH_VERSION:-}" ]]; then
+  printf '[sol-setup] ERROR: scripts/sol/common_env.sh must be sourced from bash, not the current shell.\n' >&2
+  printf '[sol-setup] Run `exec bash -l` first, then `source scripts/sol/common_env.sh`.\n' >&2
+  return 1 2>/dev/null || exit 1
+fi
+
 set -euo pipefail
 
 SOL_COMMON_ENV_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
