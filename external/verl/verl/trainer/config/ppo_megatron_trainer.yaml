@@ -123,6 +123,9 @@ algorithm:
   norm_adv_by_std_in_grpo: True
   use_kl_in_reward: False
   kl_penalty: kl # how to estimate kl divergence
+  gdpo_baseline_mode: upstream
+  gdpo_reward_keys: null
+  gdpo_reward_weights: null
   kl_ctrl:
     # Required when using verl.utils.omega_conf_to_dataclass to instantiate dataclass configs
     _target_: verl.trainer.config.KLControlConfig

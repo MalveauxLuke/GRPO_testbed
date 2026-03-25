@@ -582,6 +582,9 @@ algorithm:
   norm_adv_by_std_in_grpo: true
   use_kl_in_reward: false
   kl_penalty: kl
+  gdpo_baseline_mode: upstream
+  gdpo_reward_keys: null
+  gdpo_reward_weights: null
   kl_ctrl:
     _target_: verl.trainer.config.KLControlConfig
     type: fixed

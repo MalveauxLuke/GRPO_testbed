@@ -81,6 +81,19 @@ algorithm:
   # How to estimate KL divergence: "kl", "abs", "mse", "low_var_kl", or "full"
   kl_penalty: kl
 
+  # GDPO baseline semantics selector used for comparison runs.
+  # "upstream" keeps the vendored verl behavior.
+  # "nvlabs_reference" keeps the same runtime stack while matching the
+  # default NVLabs GDPO recipe semantics as closely as possible.
+  gdpo_baseline_mode: upstream
+
+  # Individual reward component keys returned by the reward function when
+  # running GDPO. Example: ["accuracy_reward", "format_reward"].
+  gdpo_reward_keys: null
+
+  # Optional per-component aggregation weights for GDPO.
+  gdpo_reward_weights: null
+
   # KL control configuration
   kl_ctrl:
 
