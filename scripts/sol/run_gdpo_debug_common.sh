@@ -39,6 +39,7 @@ cd "${RUN_ROOT}"
 sol_msg "Starting short 1-GPU GDPO validation run."
 sol_msg "Baseline mode: ${GDPO_BASELINE_MODE}"
 sol_msg "Using the SOL-compatible debug validation profile with reduced memory pressure and non-FlashAttention fallbacks."
+sol_msg "Using a ToolRL-compatible prompt cap so the rlla_4k prompts are not filtered out at dataset load time."
 sol_msg "Run root: ${RUN_ROOT}"
 sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
 
@@ -52,8 +53,8 @@ sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
   data.train_batch_size=2 \
   data.val_batch_size=2 \
   data.dataloader_num_workers=0 \
-  data.max_prompt_length=128 \
-  data.max_response_length=128 \
+  data.max_prompt_length=2048 \
+  data.max_response_length=256 \
   data.filter_overlong_prompts=True \
   data.truncation=error \
   actor_rollout_ref.model.path=Qwen/Qwen2.5-0.5B-Instruct \
@@ -68,13 +69,13 @@ sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
   actor_rollout_ref.model.enable_gradient_checkpointing=True \
   actor_rollout_ref.actor.fsdp_config.param_offload=False \
   actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-  actor_rollout_ref.rollout.prompt_length=128 \
+  actor_rollout_ref.rollout.prompt_length=2048 \
   actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
   actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
   actor_rollout_ref.rollout.name=vllm \
   actor_rollout_ref.rollout.gpu_memory_utilization=0.10 \
   actor_rollout_ref.rollout.max_num_seqs=4 \
-  actor_rollout_ref.rollout.max_num_batched_tokens=512 \
+  actor_rollout_ref.rollout.max_num_batched_tokens=3072 \
   +actor_rollout_ref.rollout.engine_kwargs.vllm.skip_tokenizer_init=True \
   actor_rollout_ref.rollout.agent.num_workers=1 \
   actor_rollout_ref.rollout.n=2 \
