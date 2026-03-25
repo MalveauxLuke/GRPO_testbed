@@ -1,172 +1,107 @@
-# Repo State And Future Vendoring Plan
+# Repo State And Vendoring Record
 
-This file is the durable note for the overall `VERL_GRPO` repo state.
+This file is the durable note for the overall `VERL_GRPO` repo state after vendoring `external/verl` into this repository.
 
 ## Current State
 
-Right now the repo is intentionally in a **split** layout because the immediate goal is to get official upstream `verl` GRPO running on ASU SOL with the smallest possible divergence from upstream:
+The repo now contains two tracked parts:
 
-- This GitHub repo tracks the **SOL wrapper**:
-  - SOL setup scripts
-  - Slurm scripts
+- the SOL wrapper:
+  - setup scripts
+  - Slurm entrypoints
   - docs
-  - scratch/cache path policy
-- The actual `verl` source is currently expected to live in `external/verl`
-- `external/verl` is currently treated as a **separate upstream checkout**
-- During bootstrap, the repo clones official upstream `verl`, pins it to `v0.7.1`, and installs from that source tree
+  - scratch/cache policy
+- the vendored `verl` source under `external/verl`
 
-This is a temporary architecture choice for validation and bring-up.
+This means local edits to `external/verl` can now be versioned in the same Git history as the SOL wrapper, pushed from a workstation, and pulled on SOL without relying on a separate unmanaged checkout.
 
-## Important Intent
+## Vendored Base Metadata
 
-This split layout is **not** the intended long-term architecture.
+- upstream repo URL: `https://github.com/volcengine/verl.git`
+- upstream tag: `v0.7.1`
+- upstream commit: `bec9ef74`
+- upstream package version file: `0.7.1`
+- vendoring date: `2026-03-24`
 
-The next major step, after we confirm the current setup works on SOL, is:
+## Important Vendoring Notes
 
-> Move the actual `verl` source into this GitHub repo so that architecture-level changes to `verl` itself can be versioned, edited locally, pushed to GitHub, and then pulled on SOL without relying on a separate unmanaged checkout.
+- `external/verl` was vendored from the exact checkout that had already been stabilized for SOL bring-up.
+- upstream `.gitmodules` is preserved as historical metadata.
+- upstream `recipe/` was recorded as a submodule in `.gitmodules`, but it was uninitialized at vendoring time and is **not** part of the validated SOL path in this repo.
+- this pass does **not** vendor `recipe/`; the current validated SOL bootstrap and debug workflow do not depend on it.
 
-In other words:
+## What Changed In Repo Behavior
 
-- **Current phase**: wrapper repo + upstream clone, just to validate setup
-- **Next phase**: vendor the `verl` source into this repo cleanly and make this repo the working source tree for downstream architectural changes
+### Bootstrap
 
-## Why The Split Exists Right Now
+Bootstrap no longer clones upstream `verl`.
 
-The current split was chosen because:
+It now performs:
 
-- it keeps the first pass close to official upstream `verl`
-- it reduces initial repo size and initial Git complexity
-- it makes it easier to verify that any setup issue is not caused by a custom fork too early
+1. env creation
+2. install from vendored `external/verl`
+3. import verification
 
-That is useful for bring-up, but it is not ideal if we plan to modify real `verl` internals.
+### Source Validation
 
-## Required Changes When We Vendor `verl` Into This Repo
+The shared env helpers no longer treat `external/verl/.git` as the source-of-truth.
 
-When we decide to stop treating `external/verl` as a separate clone and start tracking it in GitHub, the following changes must be made cleanly.
+They now validate the vendored source using expected files such as:
 
-### 1. Stop ignoring `external/verl`
+- `external/verl/setup.py`
+- `external/verl/scripts/install_vllm_sglang_mcore.sh`
+- `external/verl/examples/grpo_trainer/run_qwen2-7b.sh`
 
-- Remove `external/verl/` from `.gitignore`
-- Ensure no unwanted build/cache files under `external/verl` are committed
+### `clone_upstream_verl.sh`
 
-### 2. Convert `external/verl` from nested checkout to tracked source
+`scripts/sol/clone_upstream_verl.sh` is now only a compatibility validator.
 
-- Record the pinned upstream source revision before conversion
-- Remove `external/verl/.git`
-- Commit the actual source files under `external/verl`
+It no longer clones, fetches, checks out tags, or mutates `external/verl`. Normal updates now happen through `git pull` on this repo.
 
-Recommended metadata to preserve in docs or a tracked note:
+### Cleanup
 
-- upstream repo URL
-- upstream tag
-- upstream commit hash
-- date of vendoring
+`scripts/sol/cleanup_reset.sh --remove-upstream` now refuses because `external/verl` is tracked source.
 
-### 3. Patch repo scripts that currently assume `external/verl/.git`
+`--all` still removes:
 
-These scripts currently assume `external/verl` is an external checkout and must be updated:
+- scratch runtime data
+- the dedicated Mamba env
+- repo-local fallback Slurm logs
 
-- `scripts/sol/common_env.sh`
-  - `sol_ensure_upstream_checkout` should stop checking for `external/verl/.git`
-  - it should instead validate expected source files such as:
-    - `external/verl/setup.py`
-    - `external/verl/examples/grpo_trainer/run_qwen2-7b.sh`
-    - `external/verl/scripts/install_vllm_sglang_mcore.sh`
+but it deliberately preserves vendored source.
 
-- `scripts/sol/clone_upstream_verl.sh`
-  - should no longer clone by default once source is vendored
-  - should become one of:
-    - a no-op validator
-    - a manually-invoked sync helper
-    - or be removed from bootstrap entirely
+## Why This Migration Happened
 
-- `scripts/sol/bootstrap_lightwork.sh`
-  - should stop depending on clone behavior
-  - if vendored source exists, bootstrap should just:
-    - create env
-    - install vendored source
-    - verify imports
+The original split layout was useful for early bring-up because it kept the repo close to official upstream `verl` while we validated SOL compatibility.
 
-- `scripts/sol/cleanup_reset.sh`
-  - `--remove-upstream` should not delete vendored tracked source
-  - for vendored mode it should either:
-    - refuse
-    - or only clean generated files, not source
+That goal is now complete enough that the better tradeoff is reproducibility:
 
-### 4. Update docs to reflect vendored architecture
+- one repo contains both wrapper logic and `verl` source
+- SOL and local workstations can stay in sync through normal Git operations
+- future algorithm work, architecture changes, and local patches to `verl` can be reviewed and reproduced cleanly
 
-The following docs should be updated:
+## Future Upstream Sync Guidance
 
-- `README.md`
-- `docs/asu_sol_upstream_verl_grpo.md`
+The current default assumption is:
 
-These docs should stop describing `external/verl` as a cloned external dependency and start describing it as:
+- keep `v0.7.1` / `bec9ef74` as the recorded upstream base
+- make downstream changes in this repo
+- handle future upstream syncs manually and explicitly
 
-- tracked vendored source
-- pinned to upstream `v0.7.1` as the base import point
-- locally modifiable and GitHub-backed
+Any future sync should record:
 
-### 5. Decide how upstream sync will work after vendoring
-
-This decision must be explicit.
-
-Possible approaches:
-
-- manual upstream sync by copying/merging from official `verl`
-- keep a recorded upstream base tag and merge forward manually
-- later switch to a fork-based workflow
-
-At minimum, the repo should keep a tracked note of:
-
-- current upstream base tag
-- current upstream base commit
-- any local modifications relative to that base
-
-### 6. Make architectural editing reproducible across PC and SOL
-
-After vendoring:
-
-- edits to `external/verl` on a local machine can be committed and pushed
-- SOL can `git pull`
-- the source used by the install/run scripts will match GitHub
-
-This is the main reason for the migration.
-
-## Recommended Future Implementation Shape
-
-When the migration happens, the clean target state should be:
-
-- `external/verl` is tracked in Git
-- bootstrap does **not** clone official upstream `verl`
-- bootstrap only:
-  - creates env
-  - installs vendored `external/verl`
-  - verifies imports
-- docs clearly say this repo now contains:
-  - SOL wrapper logic
-  - vendored `verl` source
-
-## Suggested Migration Checklist
-
-When we are ready to do the migration, follow this checklist:
-
-1. Confirm current SOL validation workflow works end-to-end.
-2. Record the exact upstream `verl` tag and commit in use.
-3. Remove `external/verl/` from `.gitignore`.
-4. Remove nested Git metadata from `external/verl`.
-5. Commit vendored source into this repo.
-6. Patch `common_env.sh`, `clone_upstream_verl.sh`, `bootstrap_lightwork.sh`, and `cleanup_reset.sh`.
-7. Update README and SOL docs to match the new architecture.
-8. Re-test bootstrap on SOL.
-9. Re-test debug batch run on SOL.
-10. Only after that start changing `verl` internals in-repo.
+- the upstream target tag or commit
+- the merge/update date
+- notable local patches that were preserved or rebased
 
 ## Decision Record
 
-As of now, the decision is:
+As of `2026-03-24`, the repo is no longer in the temporary split-layout phase.
 
-- keep the split architecture temporarily
-- use it only to validate the current SOL setup
-- then migrate to vendored tracked `verl` source for real architecture work
+The decision is now:
 
-Any future thread working in this repo should preserve that intent unless the user explicitly changes direction.
+- keep `external/verl` tracked in this repo
+- use normal Git operations to propagate both wrapper and `verl` source changes
+- preserve the current SOL-compatible debug validation path as the operational baseline
+
+Any future thread working in this repo should assume vendored `external/verl` unless the user explicitly decides to re-architect that choice.

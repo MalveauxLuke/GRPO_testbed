@@ -6,8 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/common_env.sh"
 
 REMOVE_ENV=0
-REMOVE_UPSTREAM=0
 REMOVE_REPO_LOGS=0
+EXPLICIT_REMOVE_UPSTREAM=0
 
 usage() {
   cat <<'EOF'
@@ -19,8 +19,8 @@ Defaults:
 
 Options:
   --remove-env       Also remove the dedicated Mamba environment.
-  --remove-upstream  Also remove external/verl.
-  --all              Remove scratch runtime, env, upstream checkout, and repo-local slurm output files.
+  --remove-upstream  Refuses in vendored mode because external/verl is tracked source.
+  --all              Remove scratch runtime, env, and repo-local slurm output files. Vendored source is preserved.
   -h, --help         Show this help text.
 EOF
 }
@@ -31,11 +31,10 @@ while (($#)); do
       REMOVE_ENV=1
       ;;
     --remove-upstream)
-      REMOVE_UPSTREAM=1
+      EXPLICIT_REMOVE_UPSTREAM=1
       ;;
     --all)
       REMOVE_ENV=1
-      REMOVE_UPSTREAM=1
       REMOVE_REPO_LOGS=1
       ;;
     -h|--help)
@@ -57,16 +56,12 @@ if [[ "${SCRATCH_ROOT}" == "/scratch/${USER}" ]]; then
   sol_fail "Refusing to delete /scratch/${USER} directly."
 fi
 
+if (( EXPLICIT_REMOVE_UPSTREAM )); then
+  sol_fail "external/verl is now vendored tracked source. cleanup_reset.sh will not delete it; remove the whole repo checkout manually if you really want to discard the source tree."
+fi
+
 sol_msg "Removing repo-managed scratch runtime at ${SCRATCH_ROOT}."
 rm -rf "${SCRATCH_ROOT}"
-
-if (( REMOVE_UPSTREAM )); then
-  if [[ "${UPSTREAM_VERL_DIR}" != "${PROJECT_ROOT}/external/"* ]]; then
-    sol_fail "Refusing to remove upstream checkout outside ${PROJECT_ROOT}/external: ${UPSTREAM_VERL_DIR}"
-  fi
-  sol_msg "Removing upstream checkout at ${UPSTREAM_VERL_DIR}."
-  rm -rf "${UPSTREAM_VERL_DIR}"
-fi
 
 if (( REMOVE_ENV )); then
   sol_load_mamba
