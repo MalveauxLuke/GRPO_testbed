@@ -101,6 +101,7 @@ class TestAlgoConfig(unittest.TestCase):
         self.assertFalse(config.use_kl_in_reward)  # default value
         self.assertEqual(config.kl_penalty, "kl")  # default value
         self.assertFalse(config.use_pf_ppo)  # default value
+        self.assertEqual(config.gdpo_baseline_mode, "upstream")
 
     def test_get_method_backward_compatibility(self):
         """Test the get method for backward compatibility."""
@@ -109,6 +110,7 @@ class TestAlgoConfig(unittest.TestCase):
         # Test existing attribute
         self.assertEqual(config.get("gamma"), 0.99)
         self.assertEqual(config.get("gamma", 1.0), 0.99)
+        self.assertEqual(config.get("gdpo_baseline_mode"), "upstream")
 
         # Test non-existing attribute
         self.assertIsNone(config.get("non_existing"))

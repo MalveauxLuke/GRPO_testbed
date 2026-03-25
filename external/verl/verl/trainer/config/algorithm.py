@@ -613,8 +613,12 @@ class AlgoConfig(BaseConfig):
     # Set to None to disable, use RolloutCorrectionConfig presets (e.g., .tis(), .mis()), or pass dict
     rollout_correction: Optional[RolloutCorrectionConfig] = None
     # GDPO (Group reward-Decoupled Normalization Policy Optimization) settings.
+    # gdpo_baseline_mode: selects the baseline semantics to compare against.
+    #   "upstream" preserves the current vendored verl behavior.
+    #   "nvlabs_reference" keeps the same stack but aligns semantics with the default NVLabs recipe.
     # gdpo_reward_keys: keys in non_tensor_batch (from compute_score's return dict) that
     #   correspond to individual reward dimensions, e.g. ["format_reward", "accuracy_reward"].
     # gdpo_reward_weights: per-dimension weights for aggregation (default: equal weights).
+    gdpo_baseline_mode: str = "upstream"
     gdpo_reward_keys: Optional[list[str]] = None
     gdpo_reward_weights: Optional[list[float]] = None

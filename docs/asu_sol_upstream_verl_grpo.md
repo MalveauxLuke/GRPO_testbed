@@ -1,6 +1,6 @@
-# ASU SOL Upstream `verl` GRPO
+# ASU SOL Upstream `verl` GRPO and GDPO
 
-This guide sets up **official upstream `verl` GRPO** on ASU SOL without Docker and without a custom bridge layer.
+This guide sets up **official upstream `verl` GRPO and GDPO** on ASU SOL without Docker and without a custom bridge layer.
 
 If you just reopened a terminal and want the exact command order, start with [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md).
 
@@ -57,11 +57,16 @@ This repo intentionally does **not** implement a custom runtime bridge, multinod
 - [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md): the practical "I just SSH'd back into SOL, now what?" checklist
 - [scripts/sol/bootstrap_lightwork.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/bootstrap_lightwork.sh): convenience wrapper for env creation, vendored-source install, and import verification
 - [scripts/sol/prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh): runs the official upstream GSM8K preprocessing script
+- [scripts/sol/prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh): stages ToolRL `rlla_4k` parquet files into scratch and validates `reward_model.ground_truth`
 - [scripts/sol/prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh): pre-downloads the debug model with the same `transformers.pipeline(...)` pattern shown in the official quickstart
 - [scripts/sol/run_grpo_debug_validation.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_debug_validation.sh): short 1-GPU validation run
+- [scripts/sol/run_gdpo_debug_upstream.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_upstream.sh): short 1-GPU GDPO validation run using the current vendored upstream baseline
+- [scripts/sol/run_gdpo_debug_nvlabs_reference.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_nvlabs_reference.sh): short 1-GPU GDPO validation run using the NVLabs-reference baseline on the same vendored tree
 - [scripts/sol/run_grpo_standard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_standard.sh): standard single-node upstream 7B run
 - [scripts/sol/cleanup_reset.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/cleanup_reset.sh): safe cleanup for repo-managed scratch data, env, and repo-local fallback logs while preserving vendored source
 - [slurm/grpo_debug_validation.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_debug_validation.sbatch): debug QoS batch job
+- [slurm/gdpo_debug_upstream.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_debug_upstream.sbatch): upstream-baseline GDPO debug QoS batch job
+- [slurm/gdpo_debug_nvlabs_reference.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_debug_nvlabs_reference.sbatch): NVLabs-reference GDPO debug QoS batch job
 - [slurm/grpo_standard.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_standard.sbatch): standard 7B batch job
 
 ## Returning In A New Terminal Session
@@ -160,6 +165,12 @@ Still from a compute allocation, build the official GSM8K parquet files using th
 ./scripts/sol/prepare_gsm8k.sh
 ```
 
+For GDPO experiments, stage the real ToolRL `rlla_4k` dataset into scratch:
+
+```bash
+./scripts/sol/prepare_rlla_toolrl.sh
+```
+
 Prewarm the small debug model so the 15-minute debug job spends its time on GRPO startup rather than downloading artifacts:
 
 ```bash
@@ -179,6 +190,7 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
 ```text
 /scratch/$USER/verl-grpo/
   data/gsm8k/
+  data/rlla_4k/
   hf/
   vllm/
   ray/
@@ -191,7 +203,7 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
 
 This is deliberate because [ASU Resource Limits](https://docs.rc.asu.edu/resource-limits/) says home has a 100 GiB quota and `/scratch/$USER` is the right place for active compute data.
 
-You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh) and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
+You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh), [prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh), and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
 
 ## Phase 3: Submit the Short Debug Validation Job
 
@@ -254,7 +266,38 @@ These defaults are intentionally **debug-profile-only**. They make the SOL valid
 - The debug wrapper now uses smaller rollout and batching settings plus `agent.num_workers=1` because the original 1-GPU debug shape either hit memory pressure or failed the equal-chunk assertion once the batch got smaller.
 - The debug wrapper now caps `trainer.total_training_steps=5` because the pipeline was healthy but the old debug job was too long to finish within the 15-minute debug QoS window.
 
-## Phase 4: Submit the Standard Upstream 7B Run
+## Phase 4: Submit the GDPO Debug Baselines
+
+The repo keeps GDPO experimentation on the current vendored upstream `verl` tree and exposes two debug baselines:
+
+- `upstream`: current vendored GDPO semantics
+- `nvlabs_reference`: the same runtime stack with a named baseline mode that matches the default NVLabs `train_gdpo.sh` behavior as closely as possible without swapping forks
+
+Both debug baselines:
+
+- use the real ToolRL `rlla_4k` dataset staged under `/scratch/$USER/verl-grpo/data/rlla_4k`
+- use the same SOL-safe 0.5B debug profile
+- log `gdpo/accuracy_reward/*` and `gdpo/format_reward/*` so future experiments can compare against both baselines
+
+Submit the upstream baseline like this:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_debug_upstream.sbatch
+```
+
+Submit the NVLabs-reference baseline like this:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_debug_nvlabs_reference.sbatch
+```
+
+Use these two runs as the pre-experiment comparison point before changing the algorithm.
+
+## Phase 5: Submit the Standard Upstream 7B Run
 
 The standard path stays very close to the official [GRPO example script](https://github.com/volcengine/verl/blob/main/examples/grpo_trainer/run_qwen2-7b.sh). The wrapper in [run_grpo_standard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_standard.sh) calls that script directly and only overrides:
 
@@ -303,6 +346,14 @@ The Slurm scripts tee job output into scratch-backed logs:
 
 ```bash
 tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-debug-<jobid>.log
+```
+
+```bash
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-upstream-<jobid>.log
+```
+
+```bash
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-nvlabs-<jobid>.log
 ```
 
 ```bash

@@ -44,6 +44,7 @@ class GDPORewardManager(RewardManagerBase):
         ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
         extra_info = data_item.non_tensor_batch.get("extra_info", {})
         extra_info["experiment_name"] = self.config.trainer.experiment_name
+        extra_info["gdpo_baseline_mode"] = self.config.algorithm.get("gdpo_baseline_mode", "upstream")
 
         response_str = await self.loop.run_in_executor(
             None, lambda: self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)

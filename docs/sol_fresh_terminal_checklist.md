@@ -43,7 +43,7 @@ If you cloned it elsewhere, use that path instead.
 git pull
 ```
 
-This matters because the repo now includes the Slurm path fix, the CUDA/ROCR visibility cleanup, the env-Python fix, and the SOL-compatible debug defaults.
+This matters because the repo now includes the Slurm path fix, the CUDA/ROCR visibility cleanup, the env-Python fix, the vendored upstream source, and the SOL-compatible debug defaults for both GRPO and GDPO.
 
 ## 4. Load The Repo Shell Helpers
 
@@ -80,12 +80,13 @@ cd ~/GRPO_testbed
 source scripts/sol/common_env.sh
 ./scripts/sol/bootstrap_lightwork.sh
 ./scripts/sol/prepare_gsm8k.sh
+./scripts/sol/prepare_rlla_toolrl.sh
 ./scripts/sol/prewarm_model.sh
 ```
 
 You do **not** run bootstrap every session. You only rerun it if the env is missing, the vendored `external/verl` source is missing from your checkout, or you intentionally want to reinstall.
 
-### Case B: Normal Later Session, Just Submit The Debug Job
+### Case B: Normal Later Session, Just Submit A Debug Job
 
 From the repo root:
 
@@ -94,10 +95,23 @@ source scripts/sol/common_env.sh
 sbatch slurm/grpo_debug_validation.sbatch
 ```
 
+Or for GDPO baselines on the ToolRL `rlla_4k` dataset:
+
+```bash
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_debug_upstream.sbatch
+```
+
+```bash
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_debug_nvlabs_reference.sbatch
+```
+
 Why this simple command now works:
 
 - the checked-in debug wrapper now contains the validated SOL-compatible fallback profile
 - that profile includes the non-FlashAttention path, the tokenizer-skip workaround, lower-memory rollout settings, and a 5-step cap so the debug job can finish inside the debug QoS window
+- the GDPO wrappers use the same SOL-safe runtime profile and differ only by baseline mode (`upstream` vs `nvlabs_reference`)
 
 If Slurm ever tells you an account is required, submit with `-A`:
 
@@ -131,6 +145,16 @@ Inspect the latest chunk once:
 
 ```bash
 tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-debug-<jobid>.log
+```
+
+For GDPO logs:
+
+```bash
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-upstream-<jobid>.log
+```
+
+```bash
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-nvlabs-<jobid>.log
 ```
 
 If you want live-following without risking your interactive shell, prefer:

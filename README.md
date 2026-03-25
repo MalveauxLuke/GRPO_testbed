@@ -1,6 +1,6 @@
-# ASU SOL Upstream `verl` GRPO
+# ASU SOL Upstream `verl` GRPO and GDPO
 
-This repo provides a SOL-compliant wrapper around official upstream `verl` GRPO, with the working `v0.7.1` source vendored under `external/verl`.
+This repo provides a SOL-compliant wrapper around official upstream `verl` GRPO and GDPO, with the working `v0.7.1` source vendored under `external/verl`.
 
 Start with [docs/asu_sol_upstream_verl_grpo.md](/Users/god/Documents/VERL_GRPO/docs/asu_sol_upstream_verl_grpo.md). If you want the shortest possible "fresh SSH session" command order, use [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md).
 
@@ -10,6 +10,19 @@ The checked-in debug validation path is now designed to work with a plain:
 
 ```bash
 sbatch slurm/grpo_debug_validation.sbatch
+```
+
+The repo also includes two GDPO debug baselines on the same vendored tree:
+
+```bash
+sbatch slurm/gdpo_debug_upstream.sbatch
+sbatch slurm/gdpo_debug_nvlabs_reference.sbatch
+```
+
+Those depend on the ToolRL `rlla_4k` dataset staged by:
+
+```bash
+./scripts/sol/prepare_rlla_toolrl.sh
 ```
 
 The standard 7B wrapper intentionally stays closer to official upstream `verl` and is documented as pending broader SOL compatibility validation.

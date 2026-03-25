@@ -210,6 +210,9 @@ def compute_score(data_source, solution_str, ground_truth, extra_info, step=0):
         score: the score for the correct answer
     """
     exp_name = extra_info.get("experiment_name", "")
+    baseline_mode = extra_info.get("gdpo_baseline_mode", "upstream")
+    if baseline_mode not in {"upstream", "nvlabs_reference"}:
+        raise NotImplementedError(f"Unknown GDPO baseline mode: {baseline_mode}")
     if "llama" in exp_name:
         predict_str = (
             solution_str.split("<|start_header_id|>assistant<|end_header_id|>")[-1].split("<|eot_id|>")[0].strip()

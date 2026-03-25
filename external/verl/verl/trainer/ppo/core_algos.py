@@ -111,6 +111,7 @@ class AdvantageEstimator(str, Enum):
 
 
 ADV_ESTIMATOR_REGISTRY: dict[str, Any] = {}
+GDPO_BASELINE_MODES = {"upstream", "nvlabs_reference"}
 
 
 def register_adv_est(name_or_enum: str | AdvantageEstimator) -> Any:
@@ -148,6 +149,17 @@ def get_adv_estimator_fn(name_or_enum):
     if name not in ADV_ESTIMATOR_REGISTRY:
         raise ValueError(f"Unknown advantage estimator simply: {name}")
     return ADV_ESTIMATOR_REGISTRY[name]
+
+
+def _get_gdpo_baseline_mode(config: Optional[AlgoConfig]) -> str:
+    baseline_mode = "upstream"
+    if config is not None:
+        baseline_mode = config.get("gdpo_baseline_mode", baseline_mode)
+    if baseline_mode not in GDPO_BASELINE_MODES:
+        raise ValueError(
+            f"Unsupported GDPO baseline mode: {baseline_mode}. Supported modes are: {sorted(GDPO_BASELINE_MODES)}"
+        )
+    return baseline_mode
 
 
 class AdaptiveKLController:
@@ -406,6 +418,7 @@ def compute_gdpo_outcome_advantage(
         advantages: (bs, response_length)
         returns: (bs, response_length) – same as advantages (outcome-only).
     """
+    baseline_mode = _get_gdpo_baseline_mode(config)
     score_list = None
     reward_weights = None
 
@@ -445,6 +458,13 @@ def compute_gdpo_outcome_advantage(
         weights = torch.tensor(reward_weights, dtype=torch.float32, device=token_level_rewards.device)
     else:
         weights = torch.ones(num_scores, dtype=torch.float32, device=token_level_rewards.device)
+
+    # The current vendored GDPO implementation already matches the default NVLabs
+    # two-reward formulation after both reward dimensions are normalized separately
+    # and summed. We keep the baseline selector explicit here so future experiments
+    # can branch cleanly without changing the default baseline naming.
+    if baseline_mode == "nvlabs_reference" and reward_weights is None:
+        reward_weights = [1.0] * num_scores
 
     new_advantage = None
 
