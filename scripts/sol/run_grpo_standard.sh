@@ -32,6 +32,7 @@ mkdir -p "${RUN_ROOT}" "${LOCAL_CKPT_DIR}"
 cd "${RUN_ROOT}"
 
 sol_msg "Starting standard single-node upstream GRPO run."
+sol_msg "This standard wrapper stays close to upstream and is not yet the validated default SOL path."
 sol_msg "Run root: ${RUN_ROOT}"
 sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
 

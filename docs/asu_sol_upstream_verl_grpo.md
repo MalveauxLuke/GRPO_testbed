@@ -2,11 +2,13 @@
 
 This guide sets up **official upstream `verl` GRPO** on ASU SOL without Docker and without a custom bridge layer.
 
+If you just reopened a terminal and want the exact command order, start with [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md).
+
 ## Scope
 
 This repo wraps official upstream `verl` in a SOL-safe way:
 
-- Official `verl` source is cloned into `external/verl` and pinned to release `v0.7.1`, published on **March 16, 2026**.
+- Official `verl` source is vendored under `external/verl` and pinned to release `v0.7.1`, published on **March 16, 2026**.
 - Setup uses a dedicated **Mamba** environment, not the `base` environment.
 - Runtime caches, checkpoints, logs, Ray temp files, and Hugging Face downloads go under `/scratch/$USER/verl-grpo`.
 - Real training runs go through `sbatch`.
@@ -52,14 +54,45 @@ This repo intentionally does **not** implement a custom runtime bridge, multinod
 ## Repo Layout
 
 - [scripts/sol/common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh): shared environment contract for paths, caches, and helper functions
-- [scripts/sol/bootstrap_lightwork.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/bootstrap_lightwork.sh): convenience wrapper for env creation, upstream clone, install, and import verification
+- [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md): the practical "I just SSH'd back into SOL, now what?" checklist
+- [scripts/sol/bootstrap_lightwork.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/bootstrap_lightwork.sh): convenience wrapper for env creation, vendored-source install, and import verification
 - [scripts/sol/prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh): runs the official upstream GSM8K preprocessing script
 - [scripts/sol/prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh): pre-downloads the debug model with the same `transformers.pipeline(...)` pattern shown in the official quickstart
 - [scripts/sol/run_grpo_debug_validation.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_debug_validation.sh): short 1-GPU validation run
 - [scripts/sol/run_grpo_standard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_standard.sh): standard single-node upstream 7B run
-- [scripts/sol/cleanup_reset.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/cleanup_reset.sh): safe cleanup for repo-managed scratch data, env, and optional upstream checkout
+- [scripts/sol/cleanup_reset.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/cleanup_reset.sh): safe cleanup for repo-managed scratch data, env, and repo-local fallback logs while preserving vendored source
 - [slurm/grpo_debug_validation.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_debug_validation.sbatch): debug QoS batch job
 - [slurm/grpo_standard.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_standard.sbatch): standard 7B batch job
+
+## Returning In A New Terminal Session
+
+If your local terminal closes:
+
+- `sbatch` jobs keep running on SOL
+- an interactive `salloc` shell does not; request a new `salloc` if you still need one
+
+The practical reconnect order is:
+
+```bash
+ssh <asurite>@sol.asu.edu
+cd ~/GRPO_testbed
+git pull
+source scripts/sol/common_env.sh
+```
+
+If `sol.asu.edu` does not resolve in your local DNS/VPN setup, `login.sol.rc.asu.edu` worked during live bring-up:
+
+```bash
+ssh <asurite>@login.sol.rc.asu.edu
+```
+
+After sourcing [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh), you can activate the Mamba env interactively with:
+
+```bash
+sol_activate_env
+```
+
+You do **not** need to rerun bootstrap every session. Bootstrap is for first-time setup, reinstall, or recovery if the env or vendored `external/verl` source is missing from your checkout.
 
 ## Phase 1: Lightwork Setup
 
@@ -67,13 +100,23 @@ Start from the repo root on SOL. If you use SSH, the login step is:
 
 ```bash
 ssh <asurite>@sol.asu.edu
-cd /path/to/this/repo
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
 ```
+
+ASU's official docs currently show `sol.asu.edu`. During live bring-up, `login.sol.rc.asu.edu` also worked when `sol.asu.edu` had name-resolution trouble. Treat that as an engineering fallback, not an ASU policy statement.
 
 Request a short `lightwork` allocation for setup. This follows [ASU Partitions and QoS](https://docs.rc.asu.edu/partitions-and-qos).
 
 ```bash
-salloc -p lightwork -q public -t 02:00:00 -c 8
+salloc -p lightwork -q public -t 02:00:00 -c 4
+```
+
+Once the allocation starts, make sure you are back in the repo root on the compute node before running setup commands:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
 ```
 
 Run the bootstrap helper:
@@ -86,7 +129,6 @@ That wrapper runs:
 
 ```bash
 ./scripts/sol/create_env.sh
-./scripts/sol/clone_upstream_verl.sh
 ./scripts/sol/install_upstream_verl.sh
 ./scripts/sol/verify_install.sh
 ```
@@ -94,11 +136,21 @@ That wrapper runs:
 ### What the bootstrap does
 
 - Creates a dedicated Mamba env named `verl-grpo-sol`
-- Clones [official upstream `verl`](https://github.com/volcengine/verl) into `external/verl`
-- Checks out tag `v0.7.1`
+- Installs from the vendored `external/verl` source already tracked in this repo
+- Uses the vendored upstream base pinned to `v0.7.1` / `bec9ef74`
 - Runs the official `scripts/install_vllm_sglang_mcore.sh` with `USE_MEGATRON=0 USE_SGLANG=0`
-- Installs upstream `verl` in editable mode with `pip install --no-deps -e .`
-- Confirms `import verl`, `import ray`, and `import vllm`
+- Repairs NumPy back into the upstream `verl`-supported range with `numpy>=1.26,<2.0`
+- Reinstalls upstream `verl` in editable mode with `pip install --no-deps -e .`
+- Confirms `import verl`, `import ray`, `import vllm`, `import numpy`, and `import numba`
+
+Normal source updates now happen through `git pull` on this repo. `scripts/sol/clone_upstream_verl.sh` remains only as a compatibility validator and no longer performs cloning or fetching.
+
+The current repo also includes several real-world SOL fixes discovered during bring-up:
+
+- the Slurm batch scripts resolve the repo root through `SLURM_SUBMIT_DIR` instead of Slurm's spool path
+- `sol_activate_env` unsets `ROCR_VISIBLE_DEVICES` and `HIP_VISIBLE_DEVICES` when `CUDA_VISIBLE_DEVICES` is present, which avoids a CUDA/ROCm visibility conflict inside `verl`
+- the SOL scripts use the activated env interpreter explicitly instead of the Mamba module `python3`
+- the install wrapper repairs NumPy back into the upstream `verl`-supported range before the final editable install
 
 ## Phase 2: Prepare Data and Debug-Model Cache
 
@@ -139,29 +191,30 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
 
 This is deliberate because [ASU Resource Limits](https://docs.rc.asu.edu/resource-limits/) says home has a 100 GiB quota and `/scratch/$USER` is the right place for active compute data.
 
+You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh) and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
+
 ## Phase 3: Submit the Short Debug Validation Job
 
 The short debug job uses `public` + `debug` QoS and a 1-GPU GRPO command based on the official [Quickstart](https://verl.readthedocs.io/en/latest/start/quickstart.html) model plus the official [GRPO](https://verl.readthedocs.io/en/latest/algo/grpo.html) switches:
 
 - `algorithm.adv_estimator=grpo`
-- `actor_rollout_ref.rollout.n=4`
+- `actor_rollout_ref.rollout.n=2` in the checked-in SOL debug fallback profile
 - `actor_rollout_ref.actor.use_kl_loss=True`
 - `algorithm.use_kl_in_reward=False`
 - `trainer.critic_warmup=0`
 
-Submit it like this:
+Submit it like this from the repo root:
 
 ```bash
-cd /path/to/this/repo
-export SOL_ACCOUNT=grp_yourgroup
-sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/grpo_debug_validation.sbatch
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/grpo_debug_validation.sbatch
 ```
 
-If your account does not require `-A`, leave `SOL_ACCOUNT` unset:
+If your account requires `-A`, use the same command with an explicit account:
 
 ```bash
-unset SOL_ACCOUNT
-sbatch slurm/grpo_debug_validation.sbatch
+sbatch -A grp_yourgroup slurm/grpo_debug_validation.sbatch
 ```
 
 ### What this job is for
@@ -172,6 +225,34 @@ sbatch slurm/grpo_debug_validation.sbatch
 - Validate that logs and checkpoints land under scratch
 
 This is a **pipeline validation job**, not a performance run.
+
+### Why these debug defaults are now permanent
+
+The checked-in debug wrapper now bakes in the validated SOL-compatible fallback profile, so the plain `sbatch` command is enough.
+
+The permanent debug-only defaults are:
+
+- `actor_rollout_ref.model.override_config.attn_implementation=eager`
+- `actor_rollout_ref.ref.model.override_config.attn_implementation=eager`
+- `actor_rollout_ref.rollout.engine_kwargs.vllm.skip_tokenizer_init=True`
+- `actor_rollout_ref.model.use_remove_padding=False`
+- reduced rollout, batch, and memory settings
+- `actor_rollout_ref.rollout.agent.num_workers=1`
+- `trainer.total_training_steps=5`
+
+These defaults are intentionally **debug-profile-only**. They make the SOL validation path reliable on the tested node image, but they are not meant to redefine the standard upstream 7B training profile.
+
+### Why these defaults became permanent
+
+> **Engineering observation from live SOL bring-up**
+> The tested SOL node image exposed a sequence of real failures that the repo now patches at the right layer instead of asking users to remember them manually.
+
+- `common_env.sh` now normalizes CUDA-vs-ROCm visibility variables because `verl` worker startup failed when both `CUDA_VISIBLE_DEVICES` and `ROCR_VISIBLE_DEVICES` were present.
+- The SOL scripts now use the activated env interpreter explicitly because Slurm jobs were landing on the Mamba module `python3`, which caused `ModuleNotFoundError: verl`.
+- The install wrapper now repairs NumPy after the upstream install script because the initial dependency state drifted into `numpy 2.x`, which later broke `numba` and contradicted upstream `verl`'s own `numpy<2.0.0` requirement.
+- The debug wrapper now uses `eager` attention and disables remove-padding because the upstream prebuilt `flash-attn` wheel failed on SOL with `GLIBC_2.32` import errors both through the model attention path and through `flash_attn.bert_padding`.
+- The debug wrapper now uses smaller rollout and batching settings plus `agent.num_workers=1` because the original 1-GPU debug shape either hit memory pressure or failed the equal-chunk assertion once the batch got smaller.
+- The debug wrapper now caps `trainer.total_training_steps=5` because the pipeline was healthy but the old debug job was too long to finish within the 15-minute debug QoS window.
 
 ## Phase 4: Submit the Standard Upstream 7B Run
 
@@ -185,20 +266,26 @@ The standard path stays very close to the official [GRPO example script](https:/
 Submit the standard run like this:
 
 ```bash
-cd /path/to/this/repo
-export SOL_ACCOUNT=grp_yourgroup
-sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/grpo_standard.sbatch
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/grpo_standard.sbatch
 ```
 
 To re-enable Weights & Biases, set `ENABLE_WANDB=1` before submission:
 
 ```bash
-cd /path/to/this/repo
-export SOL_ACCOUNT=grp_yourgroup
-ENABLE_WANDB=1 sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/grpo_standard.sbatch
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+ENABLE_WANDB=1 sbatch slurm/grpo_standard.sbatch
 ```
 
 If you enable W&B, provide credentials the same way you normally would on SOL. By default this repo uses console logging only.
+
+Current status note:
+
+- the standard job script is in place
+- the standard job has **not** yet been fully validated end-to-end on SOL after the observed FlashAttention/`GLIBC_2.32` incompatibility
+- use the debug path first, then decide whether to build a SOL-compatible FlashAttention path or add a separate broader compatibility profile for larger runs
 
 ## Monitoring Jobs and Logs
 
@@ -215,11 +302,17 @@ sacct -j <jobid> --format=JobID,JobName%25,State,ExitCode,Elapsed,MaxRSS
 The Slurm scripts tee job output into scratch-backed logs:
 
 ```bash
-tail -f /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-debug-<jobid>.log
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-debug-<jobid>.log
 ```
 
 ```bash
-tail -f /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-7b-<jobid>.log
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-7b-<jobid>.log
+```
+
+For live-following without risking your interactive shell, prefer a second SSH terminal or use:
+
+```bash
+less +F /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-debug-<jobid>.log
 ```
 
 Checkpoints land under the scratch checkpoint root:
@@ -229,6 +322,12 @@ find /scratch/$USER/verl-grpo/checkpoints -maxdepth 4 -type d | sort
 ```
 
 The fallback `slurm-*.out` and `slurm-*.err` files in the repo root are just safety copies from Slurm itself; the repo-managed runtime logs are the ones under scratch.
+
+Cancel a running job with:
+
+```bash
+scancel <jobid>
+```
 
 ## Cleanup and Reset
 
@@ -246,13 +345,13 @@ Also remove the dedicated Mamba env:
 ./scripts/sol/cleanup_reset.sh --remove-env
 ```
 
-Also remove the pinned upstream checkout:
+Attempting to remove vendored source now refuses:
 
 ```bash
 ./scripts/sol/cleanup_reset.sh --remove-upstream
 ```
 
-Remove everything this repo created, including fallback Slurm logs in the repo root:
+Remove everything this repo created except vendored source, including fallback Slurm logs in the repo root:
 
 ```bash
 ./scripts/sol/cleanup_reset.sh --all
@@ -261,7 +360,7 @@ Remove everything this repo created, including fallback Slurm logs in the repo r
 This script deliberately refuses to delete:
 
 - `/scratch/$USER` as a whole
-- any upstream checkout outside `external/`
+- vendored `external/verl`
 - unrelated files in home, scratch, or project storage
 
 ## Future Customization: Reward Logic Without a Runtime Bridge
@@ -271,7 +370,7 @@ When you want to customize reward logic later, stay inside official upstream ext
 - Use `reward.custom_reward_function` for a custom function-based reward
 - Use `reward.reward_manager.name=<your_manager>` when you need a custom reward manager
 - Implement a custom manager by subclassing `RewardManagerBase`
-- Keep the runtime entrypoint on `python3 -m verl.trainer.main_ppo`
+- Keep the runtime entrypoint on the official `verl.trainer.main_ppo` module rather than introducing a separate bridge layer
 
 That keeps the architecture aligned with official upstream `verl` instead of introducing an external compatibility layer.
 

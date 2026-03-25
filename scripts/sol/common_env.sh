@@ -91,24 +91,38 @@ sol_normalize_gpu_visibility_env() {
   fi
 }
 
+sol_prepend_env_bin_to_path() {
+  if [[ -n "${CONDA_PREFIX:-}" && -d "${CONDA_PREFIX}/bin" ]]; then
+    case ":${PATH}:" in
+      *":${CONDA_PREFIX}/bin:"*) ;;
+      *) export PATH="${CONDA_PREFIX}/bin:${PATH}" ;;
+    esac
+  fi
+}
+
 sol_activate_env() {
   sol_load_mamba
   sol_deactivate_base_if_needed
   # shellcheck disable=SC1091
   source activate "${SOL_ENV_NAME}" || sol_fail "Could not activate Mamba env '${SOL_ENV_NAME}'. Run scripts/sol/create_env.sh first."
+  sol_prepend_env_bin_to_path
   sol_normalize_gpu_visibility_env
 }
 
 sol_python() {
-  if [[ -n "${CONDA_PREFIX:-}" && -x "${CONDA_PREFIX}/bin/python" ]]; then
-    printf '%s\n' "${CONDA_PREFIX}/bin/python"
-    return 0
+  if [[ -z "${CONDA_PREFIX:-}" ]]; then
+    sol_fail "No active Mamba env detected. Run sol_activate_env first."
   fi
-  if command -v python >/dev/null 2>&1; then
-    command -v python
-    return 0
+
+  if [[ -n "${CONDA_DEFAULT_ENV:-}" && "${CONDA_DEFAULT_ENV}" != "${SOL_ENV_NAME}" ]]; then
+    sol_fail "Active env '${CONDA_DEFAULT_ENV}' does not match expected env '${SOL_ENV_NAME}'. Run sol_activate_env first."
   fi
-  sol_fail "Could not locate the active environment's python interpreter."
+
+  if [[ ! -x "${CONDA_PREFIX}/bin/python" ]]; then
+    sol_fail "Expected active environment python at ${CONDA_PREFIX}/bin/python, but it was not found."
+  fi
+
+  printf '%s\n' "${CONDA_PREFIX}/bin/python"
 }
 
 sol_require_slurm_allocation() {
@@ -116,7 +130,20 @@ sol_require_slurm_allocation() {
 }
 
 sol_ensure_upstream_checkout() {
-  [[ -d "${UPSTREAM_VERL_DIR}/.git" ]] || sol_fail "Upstream verl checkout not found at ${UPSTREAM_VERL_DIR}. Run scripts/sol/clone_upstream_verl.sh first."
+  local required_paths=(
+    "${UPSTREAM_VERL_DIR}/setup.py"
+    "${UPSTREAM_VERL_DIR}/scripts/install_vllm_sglang_mcore.sh"
+    "${UPSTREAM_VERL_DIR}/examples/grpo_trainer/run_qwen2-7b.sh"
+  )
+  local missing=()
+  local required_path
+  for required_path in "${required_paths[@]}"; do
+    [[ -e "${required_path}" ]] || missing+=("${required_path}")
+  done
+
+  if (( ${#missing[@]} > 0 )); then
+    sol_fail "Vendored verl source is incomplete under ${UPSTREAM_VERL_DIR}. Missing: ${missing[*]}. Restore the repo checkout or run git pull."
+  fi
 }
 
 sol_ensure_runtime_dirs() {
