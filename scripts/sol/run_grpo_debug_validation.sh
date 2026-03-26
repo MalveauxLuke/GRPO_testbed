@@ -18,6 +18,8 @@ EXPERIMENT_NAME="${DEBUG_EXPERIMENT_NAME:-qwen2_5_0_5b_grpo_sol_debug}"
 RUN_ROOT="${OUTPUT_ROOT}/debug/${RUN_TAG}"
 LOCAL_CKPT_DIR="${CHECKPOINT_ROOT}/${EXPERIMENT_NAME}/${RUN_TAG}"
 
+sol_prepare_tracking_paths "${SOL_PROJECT_NAME}" "${EXPERIMENT_NAME}" "${RUN_TAG}"
+
 mkdir -p "${RUN_ROOT}" "${LOCAL_CKPT_DIR}"
 cd "${RUN_ROOT}"
 
@@ -25,6 +27,8 @@ sol_msg "Starting short 1-GPU GRPO validation run."
 sol_msg "Using the SOL-compatible debug validation profile with reduced memory pressure and non-FlashAttention fallbacks."
 sol_msg "Run root: ${RUN_ROOT}"
 sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
+sol_msg "TensorBoard dir: ${TENSORBOARD_DIR}"
+sol_msg "File logger path: ${VERL_FILE_LOGGER_PATH}"
 
 "$(sol_python)" -m verl.trainer.main_ppo \
   algorithm.adv_estimator=grpo \
@@ -63,7 +67,7 @@ sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
   +actor_rollout_ref.ref.model.override_config.attn_implementation=eager \
   algorithm.use_kl_in_reward=False \
   trainer.critic_warmup=0 \
-  trainer.logger='["console"]' \
+  trainer.logger='["console","tensorboard","file"]' \
   trainer.project_name="${SOL_PROJECT_NAME}" \
   trainer.experiment_name="${EXPERIMENT_NAME}" \
   trainer.n_gpus_per_node=1 \

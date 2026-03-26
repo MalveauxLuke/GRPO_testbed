@@ -19,13 +19,15 @@ RUN_ROOT="${OUTPUT_ROOT}/standard/${RUN_TAG}"
 LOCAL_CKPT_DIR="${CHECKPOINT_ROOT}/${EXPERIMENT_NAME}/${RUN_TAG}"
 ENABLE_WANDB="${ENABLE_WANDB:-0}"
 
+sol_prepare_tracking_paths "${SOL_PROJECT_NAME}" "${EXPERIMENT_NAME}" "${RUN_TAG}"
+
 if [[ "${ENABLE_WANDB}" == "1" ]]; then
-  LOGGER='["console","wandb"]'
+  LOGGER='["console","tensorboard","file","wandb"]'
   if [[ -z "${WANDB_API_KEY:-}" ]]; then
     sol_msg "ENABLE_WANDB=1 but WANDB_API_KEY is not set; relying on an existing wandb login."
   fi
 else
-  LOGGER='["console"]'
+  LOGGER='["console","tensorboard","file"]'
 fi
 
 mkdir -p "${RUN_ROOT}" "${LOCAL_CKPT_DIR}"
@@ -35,6 +37,8 @@ sol_msg "Starting standard single-node upstream GRPO run."
 sol_msg "This standard wrapper stays close to upstream and is not yet the validated default SOL path."
 sol_msg "Run root: ${RUN_ROOT}"
 sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
+sol_msg "TensorBoard dir: ${TENSORBOARD_DIR}"
+sol_msg "File logger path: ${VERL_FILE_LOGGER_PATH}"
 
 bash "${UPSTREAM_VERL_DIR}/examples/grpo_trainer/run_qwen2-7b.sh" \
   data.train_files="${GSM8K_DIR}/train.parquet" \

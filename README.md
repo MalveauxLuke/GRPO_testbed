@@ -12,6 +12,18 @@ The checked-in debug validation path is now designed to work with a plain:
 sbatch slurm/grpo_debug_validation.sbatch
 ```
 
+All checked-in run wrappers now emit:
+
+- console logs in the Slurm output
+- TensorBoard event files under `/scratch/$USER/verl-grpo/tensorboard/...`
+- structured JSONL metric logs under `/scratch/$USER/verl-grpo/metrics/...`
+
+To browse the TensorBoard logs from SOL, use:
+
+```bash
+./scripts/sol/start_tensorboard.sh
+```
+
 The repo also includes two GDPO debug baselines on the same vendored tree:
 
 ```bash
@@ -26,5 +38,6 @@ Those depend on the ToolRL `rlla_4k` dataset staged by:
 ```
 
 The standard 7B wrapper intentionally stays closer to official upstream `verl` and is documented as pending broader SOL compatibility validation.
+By default it also logs to `console + tensorboard + file`, and it only adds W&B when `ENABLE_WANDB=1`.
 
 For the vendoring record, upstream base metadata, and future sync guidance, see [docs/repo_state_and_vendoring_plan.md](/Users/god/Documents/VERL_GRPO/docs/repo_state_and_vendoring_plan.md).

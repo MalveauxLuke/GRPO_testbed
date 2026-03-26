@@ -44,6 +44,7 @@ git pull
 ```
 
 This matters because the repo now includes the Slurm path fix, the CUDA/ROCR visibility cleanup, the env-Python fix, the vendored upstream source, and the SOL-compatible debug defaults for both GRPO and GDPO.
+It also includes default TensorBoard and JSONL metric logging for all checked-in run wrappers.
 
 ## 4. Load The Repo Shell Helpers
 
@@ -177,7 +178,26 @@ less +F /scratch/$USER/verl-grpo/logs/slurm-verl-grpo-debug-<jobid>.log
 
 Or use a second SSH terminal for log following.
 
-### Case E: Cancel A Running Batch Job
+### Case E: Open TensorBoard For Readable Metrics
+
+Start TensorBoard from the repo:
+
+```bash
+source scripts/sol/common_env.sh
+./scripts/sol/start_tensorboard.sh
+```
+
+By default it serves `/scratch/$USER/verl-grpo/tensorboard` on `127.0.0.1:6006`.
+
+Each run wrapper now also writes a JSONL metric file under:
+
+```text
+/scratch/$USER/verl-grpo/metrics/
+```
+
+If you are in VS Code Remote-SSH, forward port `6006` and open the forwarded URL.
+
+### Case F: Cancel A Running Batch Job
 
 ```bash
 scancel <jobid>

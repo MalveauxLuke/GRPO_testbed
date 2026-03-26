@@ -23,6 +23,7 @@ for module_name, dist_name in [
     ("vllm", "vllm"),
     ("numpy", "numpy"),
     ("numba", "numba"),
+    ("tensorboard", "tensorboard"),
 ]:
     module = importlib.import_module(module_name)
     version = importlib.metadata.version(dist_name)
@@ -41,4 +42,7 @@ numpy_version = importlib.metadata.version("numpy")
 numpy_major = int(numpy_version.split(".", 1)[0])
 if numpy_major >= 2:
     raise SystemExit(f"numpy must stay below 2.0.0 for upstream verl compatibility; found {numpy_version}")
+
+tb_writer = importlib.import_module("torch.utils.tensorboard")
+print(f"torch.utils.tensorboard={getattr(tb_writer, '__file__', '<namespace>')}")
 PY

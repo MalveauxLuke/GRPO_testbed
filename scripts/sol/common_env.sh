@@ -25,6 +25,8 @@ export RLLA_4K_DIR="${RLLA_4K_DIR:-${DATA_ROOT}/rlla_4k}"
 export OUTPUT_ROOT="${OUTPUT_ROOT:-${SCRATCH_ROOT}/outputs}"
 export CHECKPOINT_ROOT="${CHECKPOINT_ROOT:-${SCRATCH_ROOT}/checkpoints}"
 export LOG_ROOT="${LOG_ROOT:-${SCRATCH_ROOT}/logs}"
+export TENSORBOARD_ROOT="${TENSORBOARD_ROOT:-${SCRATCH_ROOT}/tensorboard}"
+export FILE_LOG_ROOT="${FILE_LOG_ROOT:-${SCRATCH_ROOT}/metrics}"
 export RAY_TMPDIR="${RAY_TMPDIR:-${SCRATCH_ROOT}/ray}"
 export TMPDIR="${TMPDIR:-${SCRATCH_ROOT}/tmp}"
 export HF_HOME="${HF_HOME:-${SCRATCH_ROOT}/hf}"
@@ -42,6 +44,7 @@ export TOKENIZERS_PARALLELISM="${TOKENIZERS_PARALLELISM:-false}"
 export HF_HUB_ENABLE_HF_TRANSFER="${HF_HUB_ENABLE_HF_TRANSFER:-1}"
 export VLLM_NO_USAGE_STATS="${VLLM_NO_USAGE_STATS:-1}"
 export TOOLRL_REPO_URL="${TOOLRL_REPO_URL:-https://github.com/qiancheng0/ToolRL.git}"
+export VERL_FILE_LOGGER_ROOT="${VERL_FILE_LOGGER_ROOT:-${FILE_LOG_ROOT}}"
 
 sol_msg() {
   printf '[sol-setup] %s\n' "$*"
@@ -162,6 +165,8 @@ sol_ensure_runtime_dirs() {
     "${OUTPUT_ROOT}" \
     "${CHECKPOINT_ROOT}" \
     "${LOG_ROOT}" \
+    "${TENSORBOARD_ROOT}" \
+    "${FILE_LOG_ROOT}" \
     "${RAY_TMPDIR}" \
     "${TMPDIR}" \
     "${HF_HOME}" \
@@ -173,4 +178,15 @@ sol_ensure_runtime_dirs() {
     "${PIP_CACHE_DIR}" \
     "${XDG_CACHE_HOME}" \
     "${MAMBA_PKGS_DIRS}"
+}
+
+sol_prepare_tracking_paths() {
+  local project_name="$1"
+  local experiment_name="$2"
+  local run_tag="$3"
+
+  export TENSORBOARD_DIR="${TENSORBOARD_DIR:-${TENSORBOARD_ROOT}/${project_name}/${experiment_name}/${run_tag}}"
+  export VERL_FILE_LOGGER_PATH="${VERL_FILE_LOGGER_PATH:-${FILE_LOG_ROOT}/${project_name}/${experiment_name}/${run_tag}.jsonl}"
+
+  mkdir -p "${TENSORBOARD_DIR}" "$(dirname "${VERL_FILE_LOGGER_PATH}")"
 }

@@ -59,6 +59,7 @@ This repo intentionally does **not** implement a custom runtime bridge, multinod
 - [scripts/sol/prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh): runs the official upstream GSM8K preprocessing script
 - [scripts/sol/prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh): stages ToolRL `rlla_4k` parquet files into scratch and validates `reward_model.ground_truth`
 - [scripts/sol/prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh): pre-downloads the debug model with the same `transformers.pipeline(...)` pattern shown in the official quickstart
+- [scripts/sol/start_tensorboard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/start_tensorboard.sh): serves the scratch-backed TensorBoard log tree for live metric browsing
 - [scripts/sol/run_grpo_debug_validation.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_debug_validation.sh): short 1-GPU validation run
 - [scripts/sol/run_gdpo_debug_upstream.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_upstream.sh): short 1-GPU GDPO validation run using the current vendored upstream baseline
 - [scripts/sol/run_gdpo_debug_nvlabs_reference.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_nvlabs_reference.sh): short 1-GPU GDPO validation run using the NVLabs-reference baseline on the same vendored tree
@@ -200,12 +201,63 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
   outputs/
   checkpoints/
   logs/
+  tensorboard/
+  metrics/
   wandb/
 ```
 
 This is deliberate because [ASU Resource Limits](https://docs.rc.asu.edu/resource-limits/) says home has a 100 GiB quota and `/scratch/$USER` is the right place for active compute data.
 
 You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh), [prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh), and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
+
+## Training Log Backends
+
+The checked-in SOL wrappers now default to:
+
+- `console`
+- `tensorboard`
+- `file`
+
+That means every GRPO and GDPO run writes:
+
+- the usual Slurm/stdout log under `/scratch/$USER/verl-grpo/logs/`
+- TensorBoard event files under `/scratch/$USER/verl-grpo/tensorboard/<project>/<experiment>/<run_tag>/`
+- structured JSONL metric logs under `/scratch/$USER/verl-grpo/metrics/<project>/<experiment>/<run_tag>.jsonl`
+
+This is infrastructure only. It does not add any new research-event metrics yet; it just makes the existing training metrics much easier to inspect and compare.
+
+### Launch TensorBoard
+
+From a normal SOL shell in the repo:
+
+```bash
+source scripts/sol/common_env.sh
+./scripts/sol/start_tensorboard.sh
+```
+
+By default that serves the full scratch TensorBoard tree on `127.0.0.1:6006`.
+
+You can also point it at a subdirectory or choose a different port:
+
+```bash
+./scripts/sol/start_tensorboard.sh /scratch/$USER/verl-grpo/tensorboard 6007
+```
+
+### View TensorBoard Remotely
+
+If you are using VS Code Remote-SSH, forward port `6006` from the SOL host and open the forwarded local URL in your browser.
+
+If you are using plain SSH, a typical tunnel is:
+
+```bash
+ssh -L 6006:127.0.0.1:6006 <asurite>@login.sol.rc.asu.edu
+```
+
+Then open:
+
+```text
+http://127.0.0.1:6006
+```
 
 ## Phase 3: Submit the Short Debug Validation Job
 
@@ -239,6 +291,8 @@ sbatch -A grp_yourgroup slurm/grpo_debug_validation.sbatch
 - Validate that logs and checkpoints land under scratch
 
 This is a **pipeline validation job**, not a performance run.
+
+The debug wrapper now also prints the derived TensorBoard directory and JSONL file path near job startup so you can jump directly to the right log artifacts.
 
 ### Why these debug defaults are now permanent
 
@@ -280,6 +334,7 @@ Both debug baselines:
 - use the real ToolRL `rlla_4k` dataset staged under `/scratch/$USER/verl-grpo/data/rlla_4k`
 - use the same SOL-safe 0.5B debug profile
 - log `gdpo/accuracy_reward/*` and `gdpo/format_reward/*` so future experiments can compare against both baselines
+- emit `console + tensorboard + file` logs automatically under scratch
 
 Submit the upstream baseline like this:
 
@@ -307,6 +362,8 @@ The standard path stays very close to the official [GRPO example script](https:/
 - logger backend
 - project/experiment names
 - checkpoint location
+
+Its default logging backend is now `console + tensorboard + file`. If you set `ENABLE_WANDB=1`, the wrapper adds `wandb` on top of those three instead of replacing them.
 
 Submit the standard run like this:
 

@@ -33,6 +33,8 @@ RUN_ROOT="${OUTPUT_ROOT}/gdpo/${GDPO_BASELINE_MODE}/${RUN_TAG}"
 LOCAL_CKPT_DIR="${CHECKPOINT_ROOT}/${EXPERIMENT_NAME}/${RUN_TAG}"
 GDPO_PROJECT_NAME="${GDPO_PROJECT_NAME:-${SOL_PROJECT_NAME}_gdpo}"
 
+sol_prepare_tracking_paths "${GDPO_PROJECT_NAME}" "${EXPERIMENT_NAME}" "${RUN_TAG}"
+
 mkdir -p "${RUN_ROOT}" "${LOCAL_CKPT_DIR}"
 cd "${RUN_ROOT}"
 
@@ -42,6 +44,8 @@ sol_msg "Using the SOL-compatible debug validation profile with reduced memory p
 sol_msg "Using a ToolRL-compatible prompt cap so the rlla_4k prompts are not filtered out at dataset load time."
 sol_msg "Run root: ${RUN_ROOT}"
 sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
+sol_msg "TensorBoard dir: ${TENSORBOARD_DIR}"
+sol_msg "File logger path: ${VERL_FILE_LOGGER_PATH}"
 
 "$(sol_python)" -m verl.trainer.main_ppo \
   algorithm.adv_estimator=gdpo \
@@ -87,7 +91,7 @@ sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
   reward.custom_reward_function.name=compute_score \
   reward.reward_manager.name=gdpo \
   trainer.critic_warmup=0 \
-  trainer.logger='["console"]' \
+  trainer.logger='["console","tensorboard","file"]' \
   trainer.project_name="${GDPO_PROJECT_NAME}" \
   trainer.experiment_name="${EXPERIMENT_NAME}" \
   trainer.n_gpus_per_node=1 \
