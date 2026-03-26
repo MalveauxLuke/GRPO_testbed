@@ -162,6 +162,61 @@ def _get_gdpo_baseline_mode(config: Optional[AlgoConfig]) -> str:
     return baseline_mode
 
 
+def _compute_gdpo_saturation_diagnostics(
+    reward_values: np.ndarray,
+    index: np.ndarray,
+    reward_name: str,
+    epsilon: float,
+) -> tuple[dict[str, float | int | bool], list[dict[str, float | int | bool | str]]]:
+    reward_values = np.asarray(reward_values, dtype=np.float32)
+    group_index = np.asarray(index)
+    unique_groups = list(dict.fromkeys(group_index.tolist()))
+
+    num_groups = len(unique_groups)
+    saturated_group_count = 0
+    all_zero_group_count = 0
+    all_one_group_count = 0
+    events: list[dict[str, float | int | bool | str]] = []
+
+    for group_id in unique_groups:
+        group_rewards = reward_values[group_index == group_id]
+        reward_mean = float(np.mean(group_rewards))
+        reward_std = float(np.std(group_rewards))
+        is_zero_std = bool(np.isclose(reward_std, 0.0, atol=epsilon))
+        is_all_zero = bool(is_zero_std and np.all(np.isclose(group_rewards, 0.0, atol=epsilon)))
+        is_all_one = bool(is_zero_std and np.all(np.isclose(group_rewards, 1.0, atol=epsilon)))
+
+        if is_zero_std:
+            saturated_group_count += 1
+            all_zero_group_count += int(is_all_zero)
+            all_one_group_count += int(is_all_one)
+            events.append(
+                {
+                    "reward_name": reward_name,
+                    "group_id": str(group_id),
+                    "group_size": int(group_rewards.shape[0]),
+                    "reward_mean": reward_mean,
+                    "reward_std": reward_std,
+                    "is_zero_std": True,
+                    "is_all_zero": is_all_zero,
+                    "is_all_one": is_all_one,
+                }
+            )
+
+    denom = float(num_groups) if num_groups > 0 else 1.0
+    summary = {
+        "group_count": num_groups,
+        "saturated_group_count": saturated_group_count,
+        "all_zero_group_count": all_zero_group_count,
+        "all_one_group_count": all_one_group_count,
+        "group_fraction": float(saturated_group_count / denom) if num_groups > 0 else 0.0,
+        "all_zero_fraction": float(all_zero_group_count / denom) if num_groups > 0 else 0.0,
+        "all_one_fraction": float(all_one_group_count / denom) if num_groups > 0 else 0.0,
+        "any": bool(saturated_group_count > 0),
+    }
+    return summary, events
+
+
 class AdaptiveKLController:
     """
     Adaptive KL controller described in the paper:
@@ -380,6 +435,7 @@ def compute_gdpo_outcome_advantage(
     config: Optional[AlgoConfig] = None,
     non_tensor_batch: Optional[dict] = None,
     batch: Optional[dict] = None,
+    meta_info: Optional[dict] = None,
     **kwargs,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """
@@ -421,6 +477,7 @@ def compute_gdpo_outcome_advantage(
     baseline_mode = _get_gdpo_baseline_mode(config)
     score_list = None
     reward_weights = None
+    gdpo_saturation_info = None
 
     if config is not None and non_tensor_batch is not None and batch is not None:
         gdpo_reward_keys = config.get("gdpo_reward_keys", None)
@@ -433,6 +490,11 @@ def compute_gdpo_outcome_advantage(
         valid_response_length = batch["attention_mask"][:, prompt_length:].sum(dim=1) - 1
 
         score_list = []
+        gdpo_saturation_info = {
+            "per_reward": {},
+            "events": [],
+            "group_count": len(set(np.asarray(index).tolist())),
+        }
         for key in gdpo_reward_keys:
             assert key in non_tensor_batch, (
                 f"GDPO reward key '{key}' not found in non_tensor_batch. "
@@ -440,6 +502,9 @@ def compute_gdpo_outcome_advantage(
                 f"Make sure your compute_score returns a dict containing '{key}'."
             )
             comp = non_tensor_batch[key]
+            summary, events = _compute_gdpo_saturation_diagnostics(comp, index, key, epsilon)
+            gdpo_saturation_info["per_reward"][key] = summary
+            gdpo_saturation_info["events"].extend(events)
             rm_score = torch.tensor(np.asarray(comp, dtype=np.float32), device=device)
             rm_scores = torch.zeros_like(response_mask, dtype=torch.float32)
             rm_scores[torch.arange(rm_scores.size(0), device=device), valid_response_length] = rm_score
@@ -484,6 +549,14 @@ def compute_gdpo_outcome_advantage(
             new_advantage += weights[i] * normalized_score
 
     advantages = verl_F.masked_whiten(new_advantage, response_mask) * response_mask
+
+    if meta_info is not None and gdpo_saturation_info is not None:
+        saturated_group_ids = {str(event["group_id"]) for event in gdpo_saturation_info["events"]}
+        group_count = gdpo_saturation_info["group_count"]
+        gdpo_saturation_info["any_reward_group_fraction"] = (
+            float(len(saturated_group_ids) / float(group_count)) if group_count > 0 else 0.0
+        )
+        meta_info["gdpo_saturation"] = gdpo_saturation_info
 
     return advantages, advantages
 

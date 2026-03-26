@@ -126,6 +126,42 @@ def compute_response_mask(data: DataProto):
     return attention_mask[:, -response_length:]
 
 
+def _compute_gdpo_saturation_metrics(gdpo_saturation_info: dict) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    per_reward = gdpo_saturation_info.get("per_reward", {})
+    for reward_name, summary in per_reward.items():
+        metrics[f"gdpo_saturation/{reward_name}/group_fraction"] = float(summary.get("group_fraction", 0.0))
+        metrics[f"gdpo_saturation/{reward_name}/all_zero_fraction"] = float(summary.get("all_zero_fraction", 0.0))
+        metrics[f"gdpo_saturation/{reward_name}/all_one_fraction"] = float(summary.get("all_one_fraction", 0.0))
+        metrics[f"gdpo_saturation/{reward_name}/any"] = float(bool(summary.get("any", False)))
+    metrics["gdpo_saturation/any_reward_group_fraction"] = float(
+        gdpo_saturation_info.get("any_reward_group_fraction", 0.0)
+    )
+    return metrics
+
+
+def _append_gdpo_saturation_events(log_path: str | None, step: int, events: list[dict], actor_grad_norm: float | None) -> None:
+    if not log_path or not events:
+        return
+
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    with open(log_path, "a", encoding="utf-8") as fp:
+        for event in events:
+            record = {
+                "step": step,
+                "reward_name": event["reward_name"],
+                "group_id": event["group_id"],
+                "group_size": event["group_size"],
+                "reward_mean": event["reward_mean"],
+                "reward_std": event["reward_std"],
+                "is_zero_std": event["is_zero_std"],
+                "is_all_zero": event["is_all_zero"],
+                "is_all_one": event["is_all_one"],
+                "actor_grad_norm": actor_grad_norm,
+            }
+            fp.write(json.dumps(record, sort_keys=True) + "\n")
+
+
 def compute_advantage(
     data: DataProto,
     adv_estimator: AdvantageEstimator,
@@ -203,6 +239,7 @@ def compute_advantage(
         if adv_estimator in (AdvantageEstimator.GDPO, "gdpo"):
             adv_kwargs["non_tensor_batch"] = data.non_tensor_batch
             adv_kwargs["batch"] = data.batch
+            adv_kwargs["meta_info"] = data.meta_info
         # Add sum_pi_squared for Optimal Token Baseline
         if adv_estimator in (AdvantageEstimator.OPTIMAL_TOKEN_BASELINE, AdvantageEstimator.TIR_OPTIMAL_TOKEN_BASELINE):
             # Check if sum_pi_squared is available
@@ -1586,6 +1623,9 @@ class RayPPOTrainer:
                             metrics[f"gdpo/{key}/std"] = float(np.std(vals))
                             metrics[f"gdpo/{key}/max"] = float(np.max(vals))
                             metrics[f"gdpo/{key}/min"] = float(np.min(vals))
+                    gdpo_saturation_info = batch.meta_info.get("gdpo_saturation")
+                    if gdpo_saturation_info:
+                        metrics.update(_compute_gdpo_saturation_metrics(gdpo_saturation_info))
                 metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()
@@ -1593,6 +1633,15 @@ class RayPPOTrainer:
                 # compute variance proxy metrics
                 gradient_norm = metrics.get("actor/grad_norm", None)
                 metrics.update(compute_variance_proxy_metrics(batch=batch, gradient_norm=gradient_norm))
+                if gdpo_reward_keys and self.config.algorithm.adv_estimator in ("gdpo", AdvantageEstimator.GDPO):
+                    gdpo_saturation_info = batch.meta_info.get("gdpo_saturation")
+                    if gdpo_saturation_info:
+                        _append_gdpo_saturation_events(
+                            log_path=os.environ.get("GDPO_SATURATION_EVENT_LOG_PATH"),
+                            step=self.global_steps,
+                            events=gdpo_saturation_info.get("events", []),
+                            actor_grad_norm=float(gradient_norm) if gradient_norm is not None else None,
+                        )
                 # Note: mismatch metrics (KL, PPL, etc.) are collected at line 1179 after advantage computation
 
                 # this is experimental and may be changed/removed in the future in favor of a general-purpose one

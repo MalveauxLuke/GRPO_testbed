@@ -21,6 +21,8 @@ export UPSTREAM_VERL_DIR="${UPSTREAM_VERL_DIR:-${EXTERNAL_ROOT}/verl}"
 export SCRATCH_ROOT="${SCRATCH_ROOT:-/scratch/${USER}/verl-grpo}"
 export DATA_ROOT="${DATA_ROOT:-${SCRATCH_ROOT}/data}"
 export GSM8K_DIR="${GSM8K_DIR:-${DATA_ROOT}/gsm8k}"
+export GSM8K_GDPO_PROBE_DIR="${GSM8K_GDPO_PROBE_DIR:-${DATA_ROOT}/gsm8k_gdpo_saturation_probe}"
+export GSM8K_GDPO_PROBE_HARD_DIR="${GSM8K_GDPO_PROBE_HARD_DIR:-${DATA_ROOT}/gsm8k_gdpo_saturation_probe_hard}"
 export RLLA_4K_DIR="${RLLA_4K_DIR:-${DATA_ROOT}/rlla_4k}"
 export OUTPUT_ROOT="${OUTPUT_ROOT:-${SCRATCH_ROOT}/outputs}"
 export CHECKPOINT_ROOT="${CHECKPOINT_ROOT:-${SCRATCH_ROOT}/checkpoints}"
@@ -161,6 +163,8 @@ sol_ensure_runtime_dirs() {
     "${EXTERNAL_ROOT}" \
     "${DATA_ROOT}" \
     "${GSM8K_DIR}" \
+    "${GSM8K_GDPO_PROBE_DIR}" \
+    "${GSM8K_GDPO_PROBE_HARD_DIR}" \
     "${RLLA_4K_DIR}" \
     "${OUTPUT_ROOT}" \
     "${CHECKPOINT_ROOT}" \
@@ -189,4 +193,9 @@ sol_prepare_tracking_paths() {
   export VERL_FILE_LOGGER_PATH="${VERL_FILE_LOGGER_PATH:-${FILE_LOG_ROOT}/${project_name}/${experiment_name}/${run_tag}.jsonl}"
 
   mkdir -p "${TENSORBOARD_DIR}" "$(dirname "${VERL_FILE_LOGGER_PATH}")"
+}
+
+sol_prepare_gdpo_saturation_event_log_path() {
+  export GDPO_SATURATION_EVENT_LOG_PATH="${GDPO_SATURATION_EVENT_LOG_PATH:-${VERL_FILE_LOGGER_PATH%.jsonl}.gdpo_saturation_events.jsonl}"
+  mkdir -p "$(dirname "${GDPO_SATURATION_EVENT_LOG_PATH}")"
 }

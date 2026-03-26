@@ -37,6 +37,20 @@ Those depend on the ToolRL `rlla_4k` dataset staged by:
 ./scripts/sol/prepare_rlla_toolrl.sh
 ```
 
+For the separate GSM8K-based saturation probe path, first build the probe parquet files:
+
+```bash
+./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh
+```
+
+Then submit the separate probe wrapper:
+
+```bash
+sbatch slurm/gdpo_binary_saturation_probe.sbatch
+```
+
+The GDPO paths now also emit per-reward saturation metrics to TensorBoard / JSONL and append raw saturation events to a sidecar JSONL file next to the main metrics log.
+
 The standard 7B wrapper intentionally stays closer to official upstream `verl` and is documented as pending broader SOL compatibility validation.
 By default it also logs to `console + tensorboard + file`, and it only adds W&B when `ENABLE_WANDB=1`.
 

@@ -45,6 +45,7 @@ git pull
 
 This matters because the repo now includes the Slurm path fix, the CUDA/ROCR visibility cleanup, the env-Python fix, the vendored upstream source, and the SOL-compatible debug defaults for both GRPO and GDPO.
 It also includes default TensorBoard and JSONL metric logging for all checked-in run wrappers.
+The GDPO paths now also emit per-reward saturation summaries and a sidecar saturation-event JSONL file.
 
 ## 4. Load The Repo Shell Helpers
 
@@ -93,6 +94,7 @@ cd ~/GRPO_testbed
 source scripts/sol/common_env.sh
 ./scripts/sol/bootstrap_lightwork.sh
 ./scripts/sol/prepare_gsm8k.sh
+./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh
 ./scripts/sol/prepare_rlla_toolrl.sh
 ./scripts/sol/prewarm_model.sh
 ```
@@ -120,11 +122,28 @@ source scripts/sol/common_env.sh
 sbatch slurm/gdpo_debug_nvlabs_reference.sbatch
 ```
 
+Or for the separate GSM8K-based binary saturation probe:
+
+```bash
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_binary_saturation_probe.sbatch
+```
+
+To use the hard-saturation filtered training split:
+
+```bash
+source scripts/sol/common_env.sh
+GDPO_SATURATION_PROBE_DATASET_MODE=hard sbatch slurm/gdpo_binary_saturation_probe.sbatch
+```
+
+If you are still building the hard-saturation train split itself, prefer a GPU allocation for `BUILD_HARD_FILTER=1 ./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh`; it runs a real generation prepass.
+
 Why this simple command now works:
 
 - the checked-in debug wrapper now contains the validated SOL-compatible fallback profile
 - that profile includes the non-FlashAttention path, the tokenizer-skip workaround, lower-memory rollout settings, and a 5-step cap so the debug job can finish inside the debug QoS window
 - the GDPO wrappers use the same SOL-safe runtime profile and differ only by baseline mode (`upstream` vs `nvlabs_reference`)
+- the separate saturation probe wrapper uses the same runtime profile but points GDPO at a separate binary reward file and uses `rollout.n=4`
 
 If Slurm ever tells you an account is required, submit with `-A`:
 
@@ -170,6 +189,12 @@ tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-upstream-<jobid>.log
 tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-nvlabs-<jobid>.log
 ```
 
+For the binary saturation probe:
+
+```bash
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-saturation-probe-<jobid>.log
+```
+
 If you want live-following without risking your interactive shell, prefer:
 
 ```bash
@@ -193,6 +218,12 @@ Each run wrapper now also writes a JSONL metric file under:
 
 ```text
 /scratch/$USER/verl-grpo/metrics/
+```
+
+GDPO runs now also append raw saturation events to a sidecar file next to the main metrics log:
+
+```text
+<run_tag>.gdpo_saturation_events.jsonl
 ```
 
 If you are in VS Code Remote-SSH, forward port `6006` and open the forwarded URL.

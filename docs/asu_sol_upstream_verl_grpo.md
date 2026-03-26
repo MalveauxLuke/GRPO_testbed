@@ -57,17 +57,20 @@ This repo intentionally does **not** implement a custom runtime bridge, multinod
 - [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md): the practical "I just SSH'd back into SOL, now what?" checklist
 - [scripts/sol/bootstrap_lightwork.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/bootstrap_lightwork.sh): convenience wrapper for env creation, vendored-source install, and import verification
 - [scripts/sol/prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh): runs the official upstream GSM8K preprocessing script
+- [scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh): builds an unfiltered GSM8K binary-reward probe dataset and, optionally, a hard-saturation filtered train split
 - [scripts/sol/prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh): stages ToolRL `rlla_4k` parquet files into scratch and validates `reward_model.ground_truth`
 - [scripts/sol/prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh): pre-downloads the debug model with the same `transformers.pipeline(...)` pattern shown in the official quickstart
 - [scripts/sol/start_tensorboard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/start_tensorboard.sh): serves the scratch-backed TensorBoard log tree for live metric browsing
 - [scripts/sol/run_grpo_debug_validation.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_debug_validation.sh): short 1-GPU validation run
 - [scripts/sol/run_gdpo_debug_upstream.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_upstream.sh): short 1-GPU GDPO validation run using the current vendored upstream baseline
 - [scripts/sol/run_gdpo_debug_nvlabs_reference.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_nvlabs_reference.sh): short 1-GPU GDPO validation run using the NVLabs-reference baseline on the same vendored tree
+- [scripts/sol/run_gdpo_binary_saturation_probe.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_binary_saturation_probe.sh): separate GSM8K-based binary-reward GDPO probe with `rollout.n=4`
 - [scripts/sol/run_grpo_standard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_standard.sh): standard single-node upstream 7B run
 - [scripts/sol/cleanup_reset.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/cleanup_reset.sh): safe cleanup for repo-managed scratch data, env, and repo-local fallback logs while preserving vendored source
 - [slurm/grpo_debug_validation.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_debug_validation.sbatch): debug QoS batch job
 - [slurm/gdpo_debug_upstream.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_debug_upstream.sbatch): upstream-baseline GDPO debug QoS batch job
 - [slurm/gdpo_debug_nvlabs_reference.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_debug_nvlabs_reference.sbatch): NVLabs-reference GDPO debug QoS batch job
+- [slurm/gdpo_binary_saturation_probe.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_binary_saturation_probe.sbatch): separate binary-reward GDPO probe QoS batch job
 - [slurm/grpo_standard.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_standard.sbatch): standard 7B batch job
 
 ## Returning In A New Terminal Session
@@ -174,6 +177,20 @@ For GDPO experiments, stage the real ToolRL `rlla_4k` dataset into scratch:
 ./scripts/sol/prepare_rlla_toolrl.sh
 ```
 
+For the separate GSM8K-based saturation probe, derive the binary-reward parquet files from the already-prepared GSM8K parquet files:
+
+```bash
+./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh
+```
+
+To also build the hard-saturation filtered training split, set `BUILD_HARD_FILTER=1`:
+
+```bash
+BUILD_HARD_FILTER=1 ./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh
+```
+
+That filtered-train prepass runs real generation and is much faster from a GPU allocation than from a CPU-only allocation.
+
 Prewarm the small debug model so the 15-minute debug job spends its time on GRPO startup rather than downloading artifacts:
 
 ```bash
@@ -193,6 +210,8 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
 ```text
 /scratch/$USER/verl-grpo/
   data/gsm8k/
+  data/gsm8k_gdpo_saturation_probe/
+  data/gsm8k_gdpo_saturation_probe_hard/
   data/rlla_4k/
   hf/
   vllm/
@@ -208,7 +227,7 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
 
 This is deliberate because [ASU Resource Limits](https://docs.rc.asu.edu/resource-limits/) says home has a 100 GiB quota and `/scratch/$USER` is the right place for active compute data.
 
-You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh), [prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh), and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
+You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh), [prepare_gsm8k_gdpo_saturation_probe.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh), [prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh), and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
 
 ## Training Log Backends
 
@@ -224,7 +243,19 @@ That means every GRPO and GDPO run writes:
 - TensorBoard event files under `/scratch/$USER/verl-grpo/tensorboard/<project>/<experiment>/<run_tag>/`
 - structured JSONL metric logs under `/scratch/$USER/verl-grpo/metrics/<project>/<experiment>/<run_tag>.jsonl`
 
-This is infrastructure only. It does not add any new research-event metrics yet; it just makes the existing training metrics much easier to inspect and compare.
+The GDPO paths additionally emit:
+
+- `gdpo_saturation/<reward>/group_fraction`
+- `gdpo_saturation/<reward>/all_zero_fraction`
+- `gdpo_saturation/<reward>/all_one_fraction`
+- `gdpo_saturation/<reward>/any`
+- `gdpo_saturation/any_reward_group_fraction`
+
+They also append raw saturation events to a sidecar JSONL file next to the main metrics log:
+
+```text
+/scratch/$USER/verl-grpo/metrics/<project>/<experiment>/<run_tag>.gdpo_saturation_events.jsonl
+```
 
 ### Launch TensorBoard
 
@@ -334,6 +365,7 @@ Both debug baselines:
 - use the real ToolRL `rlla_4k` dataset staged under `/scratch/$USER/verl-grpo/data/rlla_4k`
 - use the same SOL-safe 0.5B debug profile
 - log `gdpo/accuracy_reward/*` and `gdpo/format_reward/*` so future experiments can compare against both baselines
+- now also log `gdpo_saturation/*` and append raw saturation events for the same runs
 - emit `console + tensorboard + file` logs automatically under scratch
 
 Submit the upstream baseline like this:
@@ -354,7 +386,51 @@ sbatch slurm/gdpo_debug_nvlabs_reference.sbatch
 
 Use these two runs as the pre-experiment comparison point before changing the algorithm.
 
-## Phase 5: Submit the Standard Upstream 7B Run
+## Phase 5: Submit the Separate GDPO Saturation Probe
+
+The saturation probe leaves the ToolRL baselines untouched and instead uses a separate GSM8K-derived dataset plus a custom binary reward module.
+
+The probe reward follows the official upstream custom reward-function contract documented in the vendored [reward_function.rst](/Users/god/Documents/VERL_GRPO/external/verl/docs/preparation/reward_function.rst):
+
+- implement `compute_score(data_source, solution_str, ground_truth, extra_info, ...)`
+- point the wrapper at that file through `reward.custom_reward_function.path`
+- choose the returned reward dimensions through `algorithm.gdpo_reward_keys`
+
+This repo’s probe reward file lives at:
+
+- [external/verl/verl/utils/reward_score/gdpo_binary_probe.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gdpo_binary_probe.py)
+
+It returns:
+
+- `correct_reward ∈ {0,1}` from exact `<answer>` matching only
+- `format_reward ∈ {0,1}` from exact `<think>...</think><answer>...</answer>` structure only
+- `score = correct_reward + format_reward`
+
+Submit the unfiltered probe like this:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_binary_saturation_probe.sbatch
+```
+
+Submit the hard-saturation filtered probe like this:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+GDPO_SATURATION_PROBE_DATASET_MODE=hard sbatch slurm/gdpo_binary_saturation_probe.sbatch
+```
+
+The probe wrapper keeps the same SOL-safe 0.5B debug profile and switches only the semantics that matter for the study:
+
+- `algorithm.adv_estimator=gdpo`
+- `algorithm.gdpo_reward_keys=["correct_reward","format_reward"]`
+- `reward.custom_reward_function.path=<gdpo_binary_probe.py>`
+- `reward.custom_reward_function.name=compute_score`
+- `actor_rollout_ref.rollout.n=4`
+
+## Phase 6: Submit the Standard Upstream 7B Run
 
 The standard path stays very close to the official [GRPO example script](https://github.com/volcengine/verl/blob/main/examples/grpo_trainer/run_qwen2-7b.sh). The wrapper in [run_grpo_standard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_standard.sh) calls that script directly and only overrides:
 
@@ -381,7 +457,7 @@ source scripts/sol/common_env.sh
 ENABLE_WANDB=1 sbatch slurm/grpo_standard.sbatch
 ```
 
-If you enable W&B, provide credentials the same way you normally would on SOL. By default this repo uses console logging only.
+If you enable W&B, provide credentials the same way you normally would on SOL. By default this repo uses `console + tensorboard + file`.
 
 Current status note:
 
@@ -413,6 +489,10 @@ tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-upstream-<jobid>.log
 
 ```bash
 tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-nvlabs-<jobid>.log
+```
+
+```bash
+tail -n 120 /scratch/$USER/verl-grpo/logs/slurm-verl-gdpo-saturation-probe-<jobid>.log
 ```
 
 ```bash
