@@ -16,7 +16,11 @@ import inspect
 
 from verl import DataProto
 from verl.experimental.reward_loop.reward_manager import register
-from verl.experimental.reward_loop.reward_manager.base import RewardManagerBase
+from verl.experimental.reward_loop.reward_manager.base import (
+    RewardManagerBase,
+    build_reward_extra_info,
+    get_default_length_limit_tokens,
+)
 from verl.utils.reward_score import default_compute_score
 
 
@@ -30,6 +34,7 @@ class NaiveRewardManager(RewardManagerBase):
         self.is_async_reward_score = inspect.iscoroutinefunction(self.compute_score)
         self.reward_router_address = reward_router_address
         self.reward_model_tokenizer = reward_model_tokenizer
+        self.default_length_limit_tokens = get_default_length_limit_tokens(config)
 
     async def run_single(self, data: DataProto) -> dict:
         assert len(data) == 1, "Only support single data item"
@@ -41,7 +46,11 @@ class NaiveRewardManager(RewardManagerBase):
 
         data_source = data_item.non_tensor_batch["data_source"]
         ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
-        extra_info = data_item.non_tensor_batch.get("extra_info", {})
+        extra_info = build_reward_extra_info(
+            data_item.non_tensor_batch.get("extra_info", {}),
+            response_length_tokens=int(valid_response_length),
+            default_length_limit_tokens=self.default_length_limit_tokens,
+        )
         tool_extra_fields = data_item.non_tensor_batch.get("tool_extra_fields", None)
         if tool_extra_fields is not None:
             extra_info.update(tool_extra_fields.items())

@@ -57,20 +57,28 @@ This repo intentionally does **not** implement a custom runtime bridge, multinod
 - [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md): the practical "I just SSH'd back into SOL, now what?" checklist
 - [scripts/sol/bootstrap_lightwork.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/bootstrap_lightwork.sh): convenience wrapper for env creation, vendored-source install, and import verification
 - [scripts/sol/prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh): runs the official upstream GSM8K preprocessing script
-- [scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh): builds an unfiltered GSM8K binary-reward probe dataset and, optionally, a hard-saturation filtered train split
+- [scripts/sol/prepare_deepscaler_math.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_deepscaler_math.sh): builds the primary DeepScaleR-style math reasoning datasets for both debug and production tiers
 - [scripts/sol/prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh): stages ToolRL `rlla_4k` parquet files into scratch and validates `reward_model.ground_truth`
 - [scripts/sol/prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh): pre-downloads the debug model with the same `transformers.pipeline(...)` pattern shown in the official quickstart
 - [scripts/sol/start_tensorboard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/start_tensorboard.sh): serves the scratch-backed TensorBoard log tree for live metric browsing
 - [scripts/sol/run_grpo_debug_validation.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_debug_validation.sh): short 1-GPU validation run
 - [scripts/sol/run_gdpo_debug_upstream.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_upstream.sh): short 1-GPU GDPO validation run using the current vendored upstream baseline
 - [scripts/sol/run_gdpo_debug_nvlabs_reference.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_debug_nvlabs_reference.sh): short 1-GPU GDPO validation run using the NVLabs-reference baseline on the same vendored tree
-- [scripts/sol/run_gdpo_binary_saturation_probe.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_binary_saturation_probe.sh): separate GSM8K-based binary-reward GDPO probe with `rollout.n=4`
+- [scripts/sol/run_grpo_math_length_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_math_length_debug.sh): primary DeepScaleR-style GRPO debug wrapper with `correct_reward + length_reward`
+- [scripts/sol/run_gdpo_math_length_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_math_length_debug.sh): primary DeepScaleR-style GDPO debug wrapper with `correct_reward + length_reward`
+- [scripts/sol/run_grpo_math_length_production.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_math_length_production.sh): production-parity GRPO math-length wrapper
+- [scripts/sol/run_gdpo_math_length_production.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_math_length_production.sh): production-parity GDPO math-length wrapper
+- [scripts/sol/run_math_length_eval.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_math_length_eval.sh): vLLM evaluation wrapper reporting correctness and length-exceeding metrics
 - [scripts/sol/run_grpo_standard.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_standard.sh): standard single-node upstream 7B run
 - [scripts/sol/cleanup_reset.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/cleanup_reset.sh): safe cleanup for repo-managed scratch data, env, and repo-local fallback logs while preserving vendored source
 - [slurm/grpo_debug_validation.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_debug_validation.sbatch): debug QoS batch job
 - [slurm/gdpo_debug_upstream.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_debug_upstream.sbatch): upstream-baseline GDPO debug QoS batch job
 - [slurm/gdpo_debug_nvlabs_reference.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_debug_nvlabs_reference.sbatch): NVLabs-reference GDPO debug QoS batch job
-- [slurm/gdpo_binary_saturation_probe.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_binary_saturation_probe.sbatch): separate binary-reward GDPO probe QoS batch job
+- [slurm/grpo_math_length_debug.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_math_length_debug.sbatch): primary math-length GRPO debug QoS batch job
+- [slurm/gdpo_math_length_debug.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_math_length_debug.sbatch): primary math-length GDPO debug QoS batch job
+- [slurm/grpo_math_length_production.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_math_length_production.sbatch): production-tier GRPO math-length batch job
+- [slurm/gdpo_math_length_production.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_math_length_production.sbatch): production-tier GDPO math-length batch job
+- [slurm/math_length_eval.sbatch](/Users/god/Documents/VERL_GRPO/slurm/math_length_eval.sbatch): vLLM evaluation job for the same boxed-answer reward contract
 - [slurm/grpo_standard.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_standard.sbatch): standard 7B batch job
 
 ## Returning In A New Terminal Session
@@ -177,19 +185,11 @@ For GDPO experiments, stage the real ToolRL `rlla_4k` dataset into scratch:
 ./scripts/sol/prepare_rlla_toolrl.sh
 ```
 
-For the separate GSM8K-based saturation probe, derive the binary-reward parquet files from the already-prepared GSM8K parquet files:
+For the primary DeepScaleR-style math reasoning path, build the boxed-answer parquet files:
 
 ```bash
-./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh
+./scripts/sol/prepare_deepscaler_math.sh
 ```
-
-To also build the hard-saturation filtered training split, set `BUILD_HARD_FILTER=1`:
-
-```bash
-BUILD_HARD_FILTER=1 ./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh
-```
-
-That filtered-train prepass runs real generation and is much faster from a GPU allocation than from a CPU-only allocation.
 
 Prewarm the small debug model so the 15-minute debug job spends its time on GRPO startup rather than downloading artifacts:
 
@@ -210,8 +210,9 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
 ```text
 /scratch/$USER/verl-grpo/
   data/gsm8k/
-  data/gsm8k_gdpo_saturation_probe/
-  data/gsm8k_gdpo_saturation_probe_hard/
+  data/deepscaler_math_length/
+  data/deepscaler_math_length_debug/
+  data/math_eval/
   data/rlla_4k/
   hf/
   vllm/
@@ -227,7 +228,7 @@ The shared runtime contract in [common_env.sh](/Users/god/Documents/VERL_GRPO/sc
 
 This is deliberate because [ASU Resource Limits](https://docs.rc.asu.edu/resource-limits/) says home has a 100 GiB quota and `/scratch/$USER` is the right place for active compute data.
 
-You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh), [prepare_gsm8k_gdpo_saturation_probe.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh), [prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh), and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
+You usually only need to run [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh), [prepare_deepscaler_math.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_deepscaler_math.sh), [prepare_rlla_toolrl.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_rlla_toolrl.sh), and [prewarm_model.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prewarm_model.sh) once per scratch reset, model change, or cache cleanup.
 
 ## Training Log Backends
 
@@ -386,49 +387,77 @@ sbatch slurm/gdpo_debug_nvlabs_reference.sbatch
 
 Use these two runs as the pre-experiment comparison point before changing the algorithm.
 
-## Phase 5: Submit the Separate GDPO Saturation Probe
+## Phase 5: Submit the Primary DeepScaleR-Style Math-Length Runs
 
-The saturation probe leaves the ToolRL baselines untouched and instead uses a separate GSM8K-derived dataset plus a custom binary reward module.
+The primary math path now leaves ToolRL baselines untouched and instead uses a separate DeepScaleR-style dataset plus a custom correctness+length reward module.
 
-The probe reward follows the official upstream custom reward-function contract documented in the vendored [reward_function.rst](/Users/god/Documents/VERL_GRPO/external/verl/docs/preparation/reward_function.rst):
+The reward file lives at:
 
-- implement `compute_score(data_source, solution_str, ground_truth, extra_info, ...)`
-- point the wrapper at that file through `reward.custom_reward_function.path`
-- choose the returned reward dimensions through `algorithm.gdpo_reward_keys`
-
-This repo’s probe reward file lives at:
-
-- [external/verl/verl/utils/reward_score/gdpo_binary_probe.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gdpo_binary_probe.py)
+- [external/verl/verl/utils/reward_score/deepscaler_math_length.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/deepscaler_math_length.py)
 
 It returns:
 
-- `correct_reward ∈ {0,1}` from exact `<answer>` matching only
-- `format_reward ∈ {0,1}` from exact `<think>...</think><answer>...</answer>` structure only
-- `score = correct_reward + format_reward`
+- `correct_reward ∈ {0,1}` from the last boxed final answer plus symbolic-first verification
+- `length_reward ∈ {0,1}` from token-count thresholding
+- `score = correct_reward + length_reward`
 
-Submit the unfiltered probe like this:
-
-```bash
-cd ~/GRPO_testbed
-source scripts/sol/common_env.sh
-sbatch slurm/gdpo_binary_saturation_probe.sbatch
-```
-
-Submit the hard-saturation filtered probe like this:
+Build the data once:
 
 ```bash
 cd ~/GRPO_testbed
 source scripts/sol/common_env.sh
-GDPO_SATURATION_PROBE_DATASET_MODE=hard sbatch slurm/gdpo_binary_saturation_probe.sbatch
+./scripts/sol/prepare_deepscaler_math.sh
 ```
 
-The probe wrapper keeps the same SOL-safe 0.5B debug profile and switches only the semantics that matter for the study:
+That prep script now defaults to the public VERL-format DeepScaleR dataset `sungyub/deepscaler-preview-verl`, then rewrites each row into the local boxed-answer reward layout used by both GRPO and GDPO.
 
-- `algorithm.adv_estimator=gdpo`
-- `algorithm.gdpo_reward_keys=["correct_reward","format_reward"]`
-- `reward.custom_reward_function.path=<gdpo_binary_probe.py>`
-- `reward.custom_reward_function.name=compute_score`
-- `actor_rollout_ref.rollout.n=4`
+Submit the GRPO debug run:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/grpo_math_length_debug.sbatch
+```
+
+Submit the GDPO debug run:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_math_length_debug.sbatch
+```
+
+When you are ready to move beyond the debug tier, the production-tier entrypoints are:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/grpo_math_length_production.sbatch
+```
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/gdpo_math_length_production.sbatch
+```
+
+The new math wrappers keep the same SOL-safe 0.5B debug profile and switch the semantics that matter for the study:
+
+- DeepScaleR-style boxed-answer prompt
+- `reward.custom_reward_function.path=<deepscaler_math_length.py>`
+- `reward.custom_reward_function.reward_kwargs.length_limit_tokens=<debug or production limit>`
+- `algorithm.gdpo_reward_keys=["correct_reward","length_reward"]` for GDPO
+- the same saturation logging stack, now keyed on `correct_reward` and `length_reward`
+
+The old GSM8K `<think>/<answer>` saturation probe remains in-tree only as an archived side path.
+
+To evaluate a model with the same boxed-answer correctness+length contract, use:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sbatch slurm/math_length_eval.sbatch
+```
 
 ## Phase 6: Submit the Standard Upstream 7B Run
 

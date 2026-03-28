@@ -56,3 +56,31 @@ class RewardManagerBase(ABC):
     @abstractmethod
     async def run_single(self, data: DataProto):
         raise NotImplementedError
+
+
+def build_reward_extra_info(
+    extra_info: dict[str, Any] | None,
+    *,
+    response_length_tokens: int,
+    default_length_limit_tokens: int | None = None,
+) -> dict[str, Any]:
+    """Build a mutable reward extra-info payload for custom reward functions."""
+
+    if isinstance(extra_info, dict):
+        payload = dict(extra_info)
+    else:
+        payload = {}
+
+    payload["response_length_tokens"] = int(response_length_tokens)
+    if default_length_limit_tokens is not None:
+        payload.setdefault("length_limit_tokens", int(default_length_limit_tokens))
+    return payload
+
+
+def get_default_length_limit_tokens(config: DictConfig) -> int | None:
+    reward_cfg = config.reward.get("custom_reward_function", {}) or {}
+    reward_kwargs = reward_cfg.get("reward_kwargs", {}) or {}
+    length_limit_tokens = reward_kwargs.get("length_limit_tokens")
+    if length_limit_tokens is None:
+        return None
+    return int(length_limit_tokens)

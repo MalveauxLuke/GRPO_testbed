@@ -37,19 +37,42 @@ Those depend on the ToolRL `rlla_4k` dataset staged by:
 ./scripts/sol/prepare_rlla_toolrl.sh
 ```
 
-For the separate GSM8K-based saturation probe path, first build the probe parquet files:
+For the primary DeepScaleR-style math reasoning path, first build the boxed-answer math parquet files:
 
 ```bash
-./scripts/sol/prepare_gsm8k_gdpo_saturation_probe.sh
+./scripts/sol/prepare_deepscaler_math.sh
 ```
 
-Then submit the separate probe wrapper:
+By default this uses the public VERL-format DeepScaleR dataset `sungyub/deepscaler-preview-verl` and rewrites it into the local boxed-answer training/eval layout used by the new math wrappers.
+
+Then submit the new debug wrappers:
 
 ```bash
-sbatch slurm/gdpo_binary_saturation_probe.sbatch
+sbatch slurm/grpo_math_length_debug.sbatch
+sbatch slurm/gdpo_math_length_debug.sbatch
 ```
 
-The GDPO paths now also emit per-reward saturation metrics to TensorBoard / JSONL and append raw saturation events to a sidecar JSONL file next to the main metrics log.
+The production-tier single-node entrypoints are also available:
+
+```bash
+sbatch slurm/grpo_math_length_production.sbatch
+sbatch slurm/gdpo_math_length_production.sbatch
+```
+
+The new math path uses:
+
+- DeepScaleR-style prompts ending with `\boxed{}`
+- binary `correct_reward` from boxed-answer extraction plus `math_verify`
+- binary `length_reward` from token count
+- the existing GDPO saturation logs, now keyed on `correct_reward` and `length_reward`
+
+You can evaluate a model on the same reward contract with:
+
+```bash
+sbatch slurm/math_length_eval.sbatch
+```
+
+The old GSM8K `<think>/<answer>` saturation probe remains in-tree temporarily as an archived side path, but it is no longer the primary math workflow.
 
 The standard 7B wrapper intentionally stays closer to official upstream `verl` and is documented as pending broader SOL compatibility validation.
 By default it also logs to `console + tensorboard + file`, and it only adds W&B when `ENABLE_WANDB=1`.

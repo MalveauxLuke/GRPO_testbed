@@ -18,39 +18,81 @@ import torch
 from verl.trainer.config import AlgoConfig
 from verl.trainer.ppo.core_algos import compute_gdpo_outcome_advantage
 from verl.trainer.ppo.ray_trainer import _append_gdpo_saturation_events, _compute_gdpo_saturation_metrics
-from verl.utils.reward_score.gdpo_binary_probe import compute_score, parse_probe_response
+from verl.utils.reward_score.deepscaler_math_length import (
+    compute_correct_reward,
+    compute_length_reward,
+    compute_score,
+    extract_last_boxed_answer,
+)
 
 
-def test_binary_probe_reward_requires_exact_think_answer_format_and_exact_answer():
-    solution_str = "<|im_start|>assistant\n<think>2 + 2 = 4</think>\n<answer>4</answer><|im_end|>"
+def test_deepscaler_reward_uses_boxed_answer_and_binary_length_reward():
+    solution_str = "We reason carefully and end with the final answer \\boxed{4}."
     result = compute_score(
-        data_source="openai/gsm8k_gdpo_saturation_probe",
+        data_source="deepscaler_math_length",
         solution_str=solution_str,
         ground_truth="4",
-        extra_info={"experiment_name": "qwen2.5-0.5b-gdpo-binary-probe"},
+        extra_info={"response_length_tokens": 32, "length_limit_tokens": 64},
     )
 
-    assert result == {"score": 2.0, "format_reward": 1.0, "correct_reward": 1.0}
+    assert result["score"] == 2.0
+    assert result["correct_reward"] == 1.0
+    assert result["length_reward"] == 1.0
+    assert result["answer_parse_ok"] == 1.0
 
 
-def test_binary_probe_reward_gives_format_credit_without_correctness_credit():
-    solution_str = "<think>reasoning</think>\n<answer>5</answer>"
+def test_deepscaler_reward_uses_the_last_boxed_answer():
+    solution_str = "A wrong intermediate result is \\boxed{3}, but the final answer is \\boxed{4}."
+    assert extract_last_boxed_answer(solution_str) == "4"
+    assert compute_correct_reward(solution_str, "4") == 1.0
+
+
+def test_deepscaler_reward_accepts_boxed_ground_truth():
+    solution_str = "The final answer is \\boxed{4}."
+    assert compute_correct_reward(solution_str, "\\boxed{4}") == 1.0
+
+
+def test_deepscaler_reward_uses_symbolic_verification_before_string_fallback():
+    solution_str = "After simplification the answer is \\boxed{\\frac{1}{2}}."
     result = compute_score(
-        data_source="openai/gsm8k_gdpo_saturation_probe",
+        data_source="deepscaler_math_length",
         solution_str=solution_str,
-        ground_truth="4",
-        extra_info={"experiment_name": "qwen2.5-0.5b-gdpo-binary-probe"},
+        ground_truth="0.5",
+        extra_info={"response_length_tokens": 80, "length_limit_tokens": 32},
     )
 
-    assert result == {"score": 1.0, "format_reward": 1.0, "correct_reward": 0.0}
+    assert result["correct_reward"] == 1.0
+    assert result["length_reward"] == 0.0
+    assert result["score"] == 1.0
 
 
-def test_binary_probe_reward_rejects_malformed_or_misordered_tags():
-    malformed = "<answer>4</answer><think>reasoning</think>"
-    format_reward, parsed_answer = parse_probe_response(malformed)
+def test_deepscaler_reward_falls_back_to_exact_string_for_non_symbolic_answers():
+    solution_str = "Casework gives roots \\boxed{9 and -7}."
+    assert compute_correct_reward(solution_str, "9 and -7") == 1.0
 
-    assert format_reward == 0
-    assert parsed_answer == ""
+
+def test_deepscaler_reward_requires_boxed_answer():
+    malformed = "The answer is 4."
+    assert extract_last_boxed_answer(malformed) is None
+    result = compute_score(
+        data_source="deepscaler_math_length",
+        solution_str=malformed,
+        ground_truth="4",
+        extra_info={"response_length_tokens": 8, "length_limit_tokens": 16},
+    )
+    assert result["correct_reward"] == 0.0
+    assert result["answer_parse_ok"] == 0.0
+
+
+def test_deepscaler_reward_fails_closed_on_malformed_boxed_answer():
+    malformed = "The answer is \\boxed{4."
+    assert extract_last_boxed_answer(malformed) is None
+    assert compute_correct_reward(malformed, "4") == 0.0
+
+
+def test_deepscaler_length_reward_uses_token_count_threshold():
+    assert compute_length_reward("unused", "unused", {"response_length_tokens": 16, "length_limit_tokens": 16}) == 1.0
+    assert compute_length_reward("unused", "unused", {"response_length_tokens": 17, "length_limit_tokens": 16}) == 0.0
 
 
 def test_gdpo_saturation_meta_info_distinguishes_all_zero_and_all_one():
@@ -67,12 +109,12 @@ def test_gdpo_saturation_meta_info_distinguishes_all_zero_and_all_one():
     }
     non_tensor_batch = {
         "correct_reward": np.asarray([0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0], dtype=np.float32),
-        "format_reward": np.asarray([1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0], dtype=np.float32),
+        "length_reward": np.asarray([1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0], dtype=np.float32),
     }
     config = AlgoConfig(
         adv_estimator="gdpo",
         gdpo_baseline_mode="upstream",
-        gdpo_reward_keys=["correct_reward", "format_reward"],
+        gdpo_reward_keys=["correct_reward", "length_reward"],
     )
     meta_info = {}
 
@@ -93,9 +135,9 @@ def test_gdpo_saturation_meta_info_distinguishes_all_zero_and_all_one():
     assert saturation["per_reward"]["correct_reward"]["group_fraction"] == 0.5
     assert saturation["per_reward"]["correct_reward"]["all_zero_fraction"] == 0.5
     assert saturation["per_reward"]["correct_reward"]["all_one_fraction"] == 0.0
-    assert saturation["per_reward"]["format_reward"]["group_fraction"] == 0.5
-    assert saturation["per_reward"]["format_reward"]["all_zero_fraction"] == 0.0
-    assert saturation["per_reward"]["format_reward"]["all_one_fraction"] == 0.5
+    assert saturation["per_reward"]["length_reward"]["group_fraction"] == 0.5
+    assert saturation["per_reward"]["length_reward"]["all_zero_fraction"] == 0.0
+    assert saturation["per_reward"]["length_reward"]["all_one_fraction"] == 0.5
     assert saturation["any_reward_group_fraction"] == 0.5
     assert len(saturation["events"]) == 2
 
@@ -109,7 +151,7 @@ def test_gdpo_saturation_metric_projection_and_event_sidecar(tmp_path):
                 "all_one_fraction": 0.0,
                 "any": True,
             },
-            "format_reward": {
+            "length_reward": {
                 "group_fraction": 0.25,
                 "all_zero_fraction": 0.0,
                 "all_one_fraction": 0.25,
@@ -134,7 +176,7 @@ def test_gdpo_saturation_metric_projection_and_event_sidecar(tmp_path):
     metrics = _compute_gdpo_saturation_metrics(gdpo_saturation_info)
     assert metrics["gdpo_saturation/correct_reward/group_fraction"] == 0.5
     assert metrics["gdpo_saturation/correct_reward/all_zero_fraction"] == 0.5
-    assert metrics["gdpo_saturation/format_reward/all_one_fraction"] == 0.25
+    assert metrics["gdpo_saturation/length_reward/all_one_fraction"] == 0.25
     assert metrics["gdpo_saturation/any_reward_group_fraction"] == 0.75
 
     log_path = tmp_path / "events.jsonl"

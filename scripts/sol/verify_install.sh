@@ -21,6 +21,7 @@ for module_name, dist_name in [
     ("verl", "verl"),
     ("ray", "ray"),
     ("vllm", "vllm"),
+    ("datasets", "datasets"),
     ("numpy", "numpy"),
     ("numba", "numba"),
     ("tensorboard", "tensorboard"),
@@ -45,4 +46,10 @@ if numpy_major >= 2:
 
 tb_writer = importlib.import_module("torch.utils.tensorboard")
 print(f"torch.utils.tensorboard={getattr(tb_writer, '__file__', '<namespace>')}")
+
+math_verify_metric = importlib.import_module("math_verify.metric")
+print(f"math_verify.metric={getattr(math_verify_metric, '__file__', '<namespace>')}")
+
+deepscaler_reward = importlib.import_module("verl.utils.reward_score.deepscaler_math_length")
+print(f"deepscaler_math_length={getattr(deepscaler_reward, '__file__', '<namespace>')}")
 PY

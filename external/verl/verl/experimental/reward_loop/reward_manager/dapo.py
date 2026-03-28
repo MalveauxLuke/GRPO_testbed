@@ -16,7 +16,11 @@ import inspect
 
 from verl import DataProto
 from verl.experimental.reward_loop.reward_manager import register
-from verl.experimental.reward_loop.reward_manager.base import RewardManagerBase
+from verl.experimental.reward_loop.reward_manager.base import (
+    RewardManagerBase,
+    build_reward_extra_info,
+    get_default_length_limit_tokens,
+)
 from verl.utils.reward_score import default_compute_score
 
 
@@ -28,6 +32,7 @@ class DAPORewardManager(RewardManagerBase):
         super().__init__(config, tokenizer, compute_score)
         self.compute_score = compute_score or default_compute_score
         self.is_async_reward_score = inspect.iscoroutinefunction(self.compute_score)
+        self.default_length_limit_tokens = get_default_length_limit_tokens(config)
 
         # DAPO Reward Config
         overlong_buffer_cfg = config.reward.get("reward_kwargs", {}).get("overlong_buffer_cfg", None)
@@ -59,7 +64,11 @@ class DAPORewardManager(RewardManagerBase):
 
         data_source = data_item.non_tensor_batch["data_source"]
         ground_truth = data_item.non_tensor_batch["reward_model"]["ground_truth"]
-        extra_info = data_item.non_tensor_batch.get("extra_info", {})
+        extra_info = build_reward_extra_info(
+            data_item.non_tensor_batch.get("extra_info", {}),
+            response_length_tokens=int(valid_response_length),
+            default_length_limit_tokens=self.default_length_limit_tokens,
+        )
 
         response_str = await self.loop.run_in_executor(
             None, lambda: self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
