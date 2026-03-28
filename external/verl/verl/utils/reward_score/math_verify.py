@@ -31,9 +31,9 @@ def compute_score(model_output: str, ground_truth: str, timeout_score: float = 0
     ground_truth_boxed = "\\boxed{" + ground_truth + "}"
     try:
         ret_score, _ = verify_func([ground_truth_boxed], [model_output])
-    except Exception:
-        pass
     except TimeoutException:
         ret_score = timeout_score
+    except Exception:
+        pass
 
     return ret_score

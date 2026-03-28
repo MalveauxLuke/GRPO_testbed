@@ -25,6 +25,7 @@ export GSM8K_GDPO_PROBE_DIR="${GSM8K_GDPO_PROBE_DIR:-${DATA_ROOT}/gsm8k_gdpo_sat
 export GSM8K_GDPO_PROBE_HARD_DIR="${GSM8K_GDPO_PROBE_HARD_DIR:-${DATA_ROOT}/gsm8k_gdpo_saturation_probe_hard}"
 export DEEPSCALER_DIR="${DEEPSCALER_DIR:-${DATA_ROOT}/deepscaler_math_length}"
 export DEEPSCALER_DEBUG_DIR="${DEEPSCALER_DEBUG_DIR:-${DATA_ROOT}/deepscaler_math_length_debug}"
+export DEEPSCALER_SATURATION_PROBE_DIR="${DEEPSCALER_SATURATION_PROBE_DIR:-${DATA_ROOT}/deepscaler_math_length_saturation_probe}"
 export MATH_EVAL_DIR="${MATH_EVAL_DIR:-${DATA_ROOT}/math_eval}"
 export RLLA_4K_DIR="${RLLA_4K_DIR:-${DATA_ROOT}/rlla_4k}"
 export OUTPUT_ROOT="${OUTPUT_ROOT:-${SCRATCH_ROOT}/outputs}"
@@ -170,6 +171,7 @@ sol_ensure_runtime_dirs() {
     "${GSM8K_GDPO_PROBE_HARD_DIR}" \
     "${DEEPSCALER_DIR}" \
     "${DEEPSCALER_DEBUG_DIR}" \
+    "${DEEPSCALER_SATURATION_PROBE_DIR}" \
     "${MATH_EVAL_DIR}" \
     "${RLLA_4K_DIR}" \
     "${OUTPUT_ROOT}" \
