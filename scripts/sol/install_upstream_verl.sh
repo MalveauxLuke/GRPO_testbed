@@ -17,6 +17,9 @@ cd "${UPSTREAM_VERL_DIR}"
 sol_msg "Installing official upstream verl dependencies with vLLM-only settings."
 USE_MEGATRON=0 USE_SGLANG=0 bash scripts/install_vllm_sglang_mcore.sh
 
+sol_msg "Installing math-verify for DeepScaleR-style math reward verification."
+"$(sol_python)" -m pip install "math-verify"
+
 sol_msg "Repairing NumPy to the upstream verl-supported range for SOL."
 "$(sol_python)" -m pip install "numpy>=1.26,<2.0"
 
