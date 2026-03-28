@@ -17,13 +17,14 @@ DEEPSCALER_DEBUG_LENGTH_LIMIT_TOKENS="${DEEPSCALER_DEBUG_LENGTH_LIMIT_TOKENS:-10
 DEEPSCALER_DEBUG_TRAIN_SIZE="${DEEPSCALER_DEBUG_TRAIN_SIZE:-256}"
 DEEPSCALER_DEBUG_TEST_SIZE="${DEEPSCALER_DEBUG_TEST_SIZE:-64}"
 DEEPSCALER_HOLDOUT_SIZE="${DEEPSCALER_HOLDOUT_SIZE:-512}"
+DEEPSCALER_DATASET_VERIFICATION_MODE="${DEEPSCALER_DATASET_VERIFICATION_MODE:-no_checks}"
 
 sol_msg "Preparing DeepScaleR-style math parquet files."
 sol_msg "Dataset: ${DEEPSCALER_DATASET_NAME}${DEEPSCALER_DATASET_CONFIG:+ (${DEEPSCALER_DATASET_CONFIG})}"
 sol_msg "Production output dir: ${DEEPSCALER_DIR}"
 sol_msg "Debug output dir: ${DEEPSCALER_DEBUG_DIR}"
 
-"$(sol_python)" - "${DEEPSCALER_DATASET_NAME}" "${DEEPSCALER_DATASET_CONFIG}" "${DEEPSCALER_DIR}" "${DEEPSCALER_DEBUG_DIR}" "${DEEPSCALER_PROD_LENGTH_LIMIT_TOKENS}" "${DEEPSCALER_DEBUG_LENGTH_LIMIT_TOKENS}" "${DEEPSCALER_DEBUG_TRAIN_SIZE}" "${DEEPSCALER_DEBUG_TEST_SIZE}" "${DEEPSCALER_HOLDOUT_SIZE}" <<'PY'
+"$(sol_python)" - "${DEEPSCALER_DATASET_NAME}" "${DEEPSCALER_DATASET_CONFIG}" "${DEEPSCALER_DIR}" "${DEEPSCALER_DEBUG_DIR}" "${DEEPSCALER_PROD_LENGTH_LIMIT_TOKENS}" "${DEEPSCALER_DEBUG_LENGTH_LIMIT_TOKENS}" "${DEEPSCALER_DEBUG_TRAIN_SIZE}" "${DEEPSCALER_DEBUG_TEST_SIZE}" "${DEEPSCALER_HOLDOUT_SIZE}" "${DEEPSCALER_DATASET_VERIFICATION_MODE}" <<'PY'
 import json
 import os
 import sys
@@ -105,12 +106,12 @@ def write_split(rows: list[dict], out_path: str) -> None:
     Dataset.from_list(rows).to_parquet(out_path)
 
 
-dataset_name, dataset_config, prod_dir, debug_dir, prod_limit, debug_limit, debug_train_size, debug_test_size, holdout_size = sys.argv[1:]
-load_kwargs = {}
+dataset_name, dataset_config, prod_dir, debug_dir, prod_limit, debug_limit, debug_train_size, debug_test_size, holdout_size, verification_mode = sys.argv[1:]
+load_kwargs = {"verification_mode": verification_mode}
 if dataset_config:
-    dataset = load_dataset(dataset_name, dataset_config)
+    dataset = load_dataset(dataset_name, dataset_config, **load_kwargs)
 else:
-    dataset = load_dataset(dataset_name)
+    dataset = load_dataset(dataset_name, **load_kwargs)
 
 split_names = list(dataset.keys())
 train_split_name = "train" if "train" in dataset else split_names[0]
