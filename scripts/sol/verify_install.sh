@@ -16,6 +16,7 @@ import sys
 
 print(f"python={sys.version.split()[0]}")
 expected_verl_root = os.environ.get("UPSTREAM_VERL_DIR")
+expected_env_root = os.path.realpath(os.environ.get("CONDA_PREFIX", ""))
 
 for module_name, dist_name in [
     ("verl", "verl"),
@@ -30,14 +31,19 @@ for module_name, dist_name in [
     version = importlib.metadata.version(dist_name)
     print(f"{module_name}={version} ({getattr(module, '__file__', '<namespace>')})")
 
+    module_path = os.path.realpath(getattr(module, "__file__", ""))
     if module_name == "verl" and expected_verl_root:
-        module_path = os.path.realpath(getattr(module, "__file__", ""))
         expected_prefix = os.path.realpath(expected_verl_root)
         if not module_path.startswith(expected_prefix + os.sep):
             raise SystemExit(
                 f"verl must import from the editable checkout under {expected_prefix}, "
                 f"but imported from {module_path}"
             )
+    elif expected_env_root and module_path and not module_path.startswith(expected_env_root + os.sep):
+        raise SystemExit(
+            f"{module_name} must import from the active env under {expected_env_root}, "
+            f"but imported from {module_path}"
+        )
 
 numpy_version = importlib.metadata.version("numpy")
 numpy_major = int(numpy_version.split(".", 1)[0])
