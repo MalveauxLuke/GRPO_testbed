@@ -21,6 +21,7 @@ export UPSTREAM_VERL_DIR="${UPSTREAM_VERL_DIR:-${EXTERNAL_ROOT}/verl}"
 export SCRATCH_ROOT="${SCRATCH_ROOT:-/scratch/${USER}/verl-grpo}"
 export DATA_ROOT="${DATA_ROOT:-${SCRATCH_ROOT}/data}"
 export GSM8K_DIR="${GSM8K_DIR:-${DATA_ROOT}/gsm8k}"
+export GSM8K_MODERN_DIR="${GSM8K_MODERN_DIR:-${DATA_ROOT}/gsm8k_modern_two_reward}"
 export GSM8K_GDPO_PROBE_DIR="${GSM8K_GDPO_PROBE_DIR:-${DATA_ROOT}/gsm8k_gdpo_saturation_probe}"
 export GSM8K_GDPO_PROBE_HARD_DIR="${GSM8K_GDPO_PROBE_HARD_DIR:-${DATA_ROOT}/gsm8k_gdpo_saturation_probe_hard}"
 export DEEPSCALER_DIR="${DEEPSCALER_DIR:-${DATA_ROOT}/deepscaler_math_length}"
@@ -168,6 +169,7 @@ sol_ensure_runtime_dirs() {
     "${EXTERNAL_ROOT}" \
     "${DATA_ROOT}" \
     "${GSM8K_DIR}" \
+    "${GSM8K_MODERN_DIR}" \
     "${GSM8K_GDPO_PROBE_DIR}" \
     "${GSM8K_GDPO_PROBE_HARD_DIR}" \
     "${DEEPSCALER_DIR}" \

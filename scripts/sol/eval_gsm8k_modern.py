@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -9,7 +11,7 @@ from typing import Any
 from datasets import load_dataset
 from vllm import LLM, SamplingParams
 
-from verl.utils.reward_score.deepscaler_math_length import compute_score
+from verl.utils.reward_score.gsm8k_modern_two_reward import compute_score
 
 
 def maybe_json(value: Any):
@@ -24,8 +26,6 @@ def get_messages(example: dict) -> list[dict[str, str]]:
     prompt = maybe_json(example.get("prompt"))
     if isinstance(prompt, list) and prompt:
         return [{"role": str(item["role"]), "content": str(item["content"])} for item in prompt]
-    if isinstance(prompt, str):
-        return [{"role": "user", "content": prompt}]
     raise ValueError("Expected a VERL-format prompt field.")
 
 
@@ -37,15 +37,14 @@ def get_ground_truth(example: dict) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Evaluate a DeepScaleR-style math model with the boxed-answer reward.")
+    parser = argparse.ArgumentParser(description="Evaluate the modern 2-reward GSM8K baseline.")
     parser.add_argument("--model-path", required=True)
     parser.add_argument("--dataset-path", required=True)
     parser.add_argument("--output-path", required=True)
-    parser.add_argument("--samples-per-prompt", type=int, default=16)
+    parser.add_argument("--samples-per-prompt", type=int, default=8)
     parser.add_argument("--temperature", type=float, default=0.6)
     parser.add_argument("--top-p", type=float, default=0.95)
-    parser.add_argument("--max-tokens", type=int, default=32768)
-    parser.add_argument("--length-limit-tokens", type=int, default=4000)
+    parser.add_argument("--max-tokens", type=int, default=512)
     parser.add_argument("--tensor-parallel-size", type=int, default=1)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.75)
     args = parser.parse_args()
@@ -72,16 +71,12 @@ def main() -> None:
         top_p=args.top_p,
         max_tokens=args.max_tokens,
     )
-
     outputs = llm.generate(rendered_prompts, sampling_params=sampling_params)
 
     prompt_pass_at_1 = []
     prompt_pass_at_n = []
     sample_correctness = []
-    sample_exceed = []
-    sample_lengths = []
-    sample_length_reward = []
-    max_response_length = 0
+    sample_format = []
 
     with open(per_prompt_path, "w", encoding="utf-8") as per_prompt_fp:
         for rendered_prompt, example, request_output in zip(rendered_prompts, dataset, outputs, strict=True):
@@ -89,41 +84,31 @@ def main() -> None:
             extra_info = maybe_json(example.get("extra_info", {}))
             if not isinstance(extra_info, dict):
                 extra_info = {}
-            extra_info.setdefault("length_limit_tokens", args.length_limit_tokens)
 
             prompt_results = []
             for output in request_output.outputs:
                 reward_info = compute_score(
-                    data_source=str(example.get("data_source", "deepscaler_math_length")),
+                    data_source=str(example.get("data_source", "openai/gsm8k_modern_two_reward")),
                     solution_str=output.text,
                     ground_truth=ground_truth,
-                    extra_info={
-                        **extra_info,
-                        "response_length_tokens": len(output.token_ids),
-                    },
+                    extra_info=extra_info,
                 )
-                correct = float(reward_info["correct_reward"])
-                length_reward = float(reward_info["length_reward"])
-                exceed = float(length_reward == 0.0)
-                response_len = len(output.token_ids)
+                correct_reward = float(reward_info["correct_reward"])
+                format_reward = float(reward_info["format_reward"])
 
                 prompt_results.append(
                     {
                         "text": output.text,
                         "score": float(reward_info["score"]),
+                        "correct_reward": correct_reward,
+                        "format_reward": format_reward,
                         "answer_parse_ok": float(reward_info["answer_parse_ok"]),
-                        "response_length_tokens": response_len,
-                        "length_limit_tokens": float(reward_info["length_limit_tokens"]),
-                        "correct_reward": correct,
-                        "length_reward": length_reward,
-                        "exceed": exceed,
+                        "parsed_answer": str(reward_info["parsed_answer"]),
+                        "expected_answer": str(reward_info["expected_answer"]),
                     }
                 )
-                sample_correctness.append(correct)
-                sample_exceed.append(exceed)
-                sample_lengths.append(response_len)
-                sample_length_reward.append(length_reward)
-                max_response_length = max(max_response_length, response_len)
+                sample_correctness.append(correct_reward)
+                sample_format.append(format_reward)
 
             prompt_correctness = [item["correct_reward"] for item in prompt_results]
             prompt_pass_at_1.append(mean(prompt_correctness))
@@ -132,7 +117,7 @@ def main() -> None:
                 json.dumps(
                     {
                         "prompt": rendered_prompt,
-                        "data_source": str(example.get("data_source", "deepscaler_math_length")),
+                        "data_source": str(example.get("data_source", "openai/gsm8k_modern_two_reward")),
                         "ground_truth": ground_truth,
                         "extra_info": extra_info,
                         "samples": prompt_results,
@@ -150,14 +135,10 @@ def main() -> None:
         "temperature": args.temperature,
         "top_p": args.top_p,
         "max_tokens": args.max_tokens,
-        "length_limit_tokens": args.length_limit_tokens,
         "pass_at_1": mean(prompt_pass_at_1) if prompt_pass_at_1 else 0.0,
         f"pass_at_{args.samples_per_prompt}_any": mean(prompt_pass_at_n) if prompt_pass_at_n else 0.0,
         "correct_reward_mean": mean(sample_correctness) if sample_correctness else 0.0,
-        "exceed": mean(sample_exceed) if sample_exceed else 0.0,
-        "length_reward_mean": mean(sample_length_reward) if sample_length_reward else 0.0,
-        "response_length_mean": mean(sample_lengths) if sample_lengths else 0.0,
-        "response_length_max": max_response_length,
+        "format_reward_mean": mean(sample_format) if sample_format else 0.0,
         "per_prompt_path": per_prompt_path,
     }
 

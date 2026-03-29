@@ -94,6 +94,7 @@ RUN_TAG="${RUN_TAG:-$(sol_timestamp)}"
 RUN_ROOT="${OUTPUT_ROOT}/math_length/${PROFILE}/${ADV_ESTIMATOR}/${RUN_TAG}"
 LOCAL_CKPT_DIR="${CHECKPOINT_ROOT}/${EXPERIMENT_NAME}/${RUN_TAG}"
 PROJECT_NAME="${MATH_LENGTH_PROJECT_NAME:-${SOL_PROJECT_NAME}_${ADV_ESTIMATOR}_math_length}"
+ROLLOUT_DATA_DIR="${MATH_LENGTH_ROLLOUT_DATA_DIR:-}"
 
 sol_prepare_tracking_paths "${PROJECT_NAME}" "${EXPERIMENT_NAME}" "${RUN_TAG}"
 if [[ "${ADV_ESTIMATOR}" == "gdpo" ]]; then
@@ -113,6 +114,10 @@ sol_msg "TensorBoard dir: ${TENSORBOARD_DIR}"
 sol_msg "File logger path: ${VERL_FILE_LOGGER_PATH}"
 if [[ "${ADV_ESTIMATOR}" == "gdpo" ]]; then
   sol_msg "GDPO saturation event log: ${GDPO_SATURATION_EVENT_LOG_PATH}"
+fi
+if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then
+  mkdir -p "${ROLLOUT_DATA_DIR}"
+  sol_msg "Rollout data dir: ${ROLLOUT_DATA_DIR}"
 fi
 
 cmd=(
@@ -197,6 +202,10 @@ if [[ "${ENABLE_FILTER_GROUPS}" == "True" ]]; then
     "algorithm.filter_groups.metric=${FILTER_GROUPS_METRIC}"
     "algorithm.filter_groups.max_num_gen_batches=${MAX_NUM_GEN_BATCHES}"
   )
+fi
+
+if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then
+  cmd+=("trainer.rollout_data_dir=${ROLLOUT_DATA_DIR}")
 fi
 
 "${cmd[@]}" "$@"
