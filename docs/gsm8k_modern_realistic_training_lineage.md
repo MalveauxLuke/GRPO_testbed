@@ -43,6 +43,7 @@ These values come from the official public Qwen2.5-3B GSM8K GRPO-LoRA script, no
 - uses `algorithm.gdpo_reward_keys=["correct_reward","format_reward"]`
 - keeps the already-verified GSM8K modern structured-output dataset and reward function
 - sets `rollout.n=4` instead of `5` to align with the grouped multi-reward GDPO-style setup
+- sets actor / rollout / ref micro-batches to `32` instead of the official script's `40`, because with `rollout.n=4` and `2` GPUs the normalized actor mini-batch is `32`
 - keeps the existing GDPO saturation event logging and optional rollout-dump audit hook
 
 ## What this script does not change
