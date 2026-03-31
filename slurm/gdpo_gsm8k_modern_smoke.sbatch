@@ -5,10 +5,11 @@
 #   SOL_ACCOUNT=grp_<your_group> sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/gdpo_gsm8k_modern_smoke.sbatch
 # Optional rollout dump capture:
 #   GSM8K_MODERN_ROLLOUT_DATA_DIR=/scratch/$USER/verl-grpo/rollout_dumps/gsm8k_modern_smoke_$(date +%Y%m%d-%H%M%S) sbatch slurm/gdpo_gsm8k_modern_smoke.sbatch
-# This smoke wrapper exercises the realistic 3B/2-GPU training path with short debug-style limits.
+# This smoke wrapper exercises the realistic 3B/2-GPU training path with short integration limits.
+# On SOL, the debug QoS is limited to 15 minutes, so this uses htc/public for a 45-minute smoke run.
 #SBATCH --job-name=verl-gdpo-gsm8k-modern-smoke
-#SBATCH --partition=public
-#SBATCH --qos=debug
+#SBATCH --partition=htc
+#SBATCH --qos=public
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
