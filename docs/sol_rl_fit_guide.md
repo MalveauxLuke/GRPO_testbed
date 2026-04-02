@@ -67,11 +67,11 @@ For fast first-stage GSM8K preflight on the debug queue:
 
 This preserves the real `sol_fit_2gpu` memory shape and is now the short first-stage `feasibility-smoke` used to catch immediate init/load failures inside the 15-minute debug window.
 
-For the longer second-stage GSM8K preflight:
+For the longer second-stage GSM8K preflight and official pre-full-run gate:
 
 - [gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch)
 
-This is the 40-minute extended preflight before the main run at [gdpo_gsm8k_modern_fit_2gpu.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu.sbatch).
+This is the 40-minute `integration-smoke` gate before the main run at [gdpo_gsm8k_modern_fit_2gpu.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu.sbatch). It intentionally bakes in the proven SOL-safe compatibility shape for the current Qwen2.5-3B fit path: `use_shm=False`, `gpu_memory_utilization=0.35`, `max_num_seqs=64`, `skip_tokenizer_init=True`, and `val_max_samples=64`.
 
 Reference-public GSM8K path:
 

@@ -2,7 +2,7 @@
 # Config provenance:
 # - Semantic baseline: modern GSM8K two-reward GDPO (`correct_reward + format_reward`).
 # - Runtime profile: sol_fit_2gpu.
-# - Entry type: 40-minute extended feasibility preflight for the recommended 2-GPU SOL fit profile.
+# - Entry type: 40-minute official integration-smoke gate before the recommended 2-GPU SOL full run.
 # - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh
 # - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh
 # - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md
@@ -43,7 +43,7 @@ JOB_LOG="${LOG_ROOT}/slurm-${SLURM_JOB_NAME}-${SLURM_JOB_ID}.log"
 exec > >(tee -a "${JOB_LOG}") 2>&1
 
 sol_msg "Scratch log: ${JOB_LOG}"
-sol_msg "Submitting 40-minute GSM8K fit-contract extended feasibility preflight from ${PROJECT_ROOT}."
+sol_msg "Submitting 40-minute GSM8K fit-contract integration-smoke gate before full training from ${PROJECT_ROOT}."
 
 export GSM8K_MODERN_N_GPUS_PER_NODE="${GSM8K_MODERN_N_GPUS_PER_NODE:-2}"
 export GSM8K_MODERN_TOTAL_TRAINING_STEPS="${GSM8K_MODERN_TOTAL_TRAINING_STEPS:-5}"
@@ -51,6 +51,11 @@ export GSM8K_MODERN_TOTAL_EPOCHS="${GSM8K_MODERN_TOTAL_EPOCHS:-1}"
 export GSM8K_MODERN_SAVE_FREQ="${GSM8K_MODERN_SAVE_FREQ:-1}"
 export GSM8K_MODERN_TEST_FREQ="${GSM8K_MODERN_TEST_FREQ:-1}"
 export GSM8K_MODERN_VAL_BEFORE_TRAIN="${GSM8K_MODERN_VAL_BEFORE_TRAIN:-False}"
-export GSM8K_MODERN_RUN_CLASSIFICATION="${GSM8K_MODERN_RUN_CLASSIFICATION:-feasibility-smoke}"
+export GSM8K_MODERN_USE_SHM="${GSM8K_MODERN_USE_SHM:-False}"
+export GSM8K_MODERN_GPU_MEMORY_UTILIZATION="${GSM8K_MODERN_GPU_MEMORY_UTILIZATION:-0.35}"
+export GSM8K_MODERN_MAX_NUM_SEQS="${GSM8K_MODERN_MAX_NUM_SEQS:-64}"
+export GSM8K_MODERN_SKIP_TOKENIZER_INIT="${GSM8K_MODERN_SKIP_TOKENIZER_INIT:-True}"
+export GSM8K_MODERN_VAL_MAX_SAMPLES="${GSM8K_MODERN_VAL_MAX_SAMPLES:-64}"
+export GSM8K_MODERN_RUN_CLASSIFICATION="${GSM8K_MODERN_RUN_CLASSIFICATION:-integration-smoke}"
 
 "${PROJECT_ROOT}/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh" "$@"
