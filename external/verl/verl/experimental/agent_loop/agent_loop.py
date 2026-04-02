@@ -54,6 +54,33 @@ logger.setLevel(os.getenv("VERL_LOGGING_LEVEL", "WARN"))
 DEFAULT_ROUTING_CACHE_SIZE = 10000
 
 
+def _normalize_stop_token_ids(eos_token_id: Any) -> list[int]:
+    if eos_token_id is None:
+        return []
+
+    if isinstance(eos_token_id, np.ndarray):
+        eos_token_id = eos_token_id.tolist()
+    elif isinstance(eos_token_id, torch.Tensor):
+        eos_token_id = eos_token_id.tolist()
+
+    if isinstance(eos_token_id, (list, tuple, set)):
+        return [int(token_id) for token_id in eos_token_id if token_id is not None]
+
+    return [int(eos_token_id)]
+
+
+def _inject_stop_token_ids_from_meta_info(
+    sampling_params: dict[str, Any], meta_info: dict[str, Any], ignore_eos: bool
+) -> dict[str, Any]:
+    if ignore_eos or sampling_params.get("stop_token_ids") is not None:
+        return sampling_params
+
+    stop_token_ids = _normalize_stop_token_ids(meta_info.get("eos_token_id"))
+    if stop_token_ids:
+        sampling_params["stop_token_ids"] = stop_token_ids
+    return sampling_params
+
+
 @ray.remote
 class GlobalRequestLoadBalancer:
     """Global sticky-session + in-flight load balancer shared by all AgentLoopWorkers."""
@@ -486,6 +513,15 @@ class AgentLoopWorker:
             sampling_params["top_p"] = config.val_kwargs.top_p
             sampling_params["top_k"] = config.val_kwargs.top_k
             sampling_params["temperature"] = config.val_kwargs.temperature
+
+        # The trainer already knows EOS ids. Carry them into vLLM sampling so
+        # token-in/token-out requests can stop on EOS even when tokenizer init
+        # stays disabled for rollout compatibility.
+        sampling_params = _inject_stop_token_ids_from_meta_info(
+            sampling_params=sampling_params,
+            meta_info=batch.meta_info,
+            ignore_eos=config.ignore_eos,
+        )
 
         # by default, we assume it's a single turn agent
         if "agent_name" not in batch.non_tensor_batch:

@@ -27,7 +27,9 @@ from verl.experimental.agent_loop.agent_loop import (
     AgentLoopOutput,
     AgentLoopWorker,
     DictConfigWrap,
+    _inject_stop_token_ids_from_meta_info,
     _InternalAgentLoopOutput,
+    _normalize_stop_token_ids,
 )
 from verl.experimental.agent_loop.single_turn_agent_loop import SingleTurnAgentLoop
 from verl.utils.dataset.rl_dataset import RLHFDataset
@@ -292,3 +294,34 @@ async def test_agent_loop_postprocess_accepts_read_only_routed_experts_on_cpu():
     torch.testing.assert_close(internal.routed_experts[:, 2:6], expected)
     assert torch.count_nonzero(internal.routed_experts[:, :2]) == 0
     assert torch.count_nonzero(internal.routed_experts[:, 6:]) == 0
+
+
+def test_normalize_stop_token_ids_handles_scalars_and_sequences():
+    assert _normalize_stop_token_ids(None) == []
+    assert _normalize_stop_token_ids(151645) == [151645]
+    assert _normalize_stop_token_ids([151645, 151643]) == [151645, 151643]
+    assert _normalize_stop_token_ids(np.array([151645, 151643])) == [151645, 151643]
+
+
+def test_inject_stop_token_ids_from_meta_info_uses_known_eos_ids():
+    sampling_params = {"temperature": 0.0}
+
+    updated = _inject_stop_token_ids_from_meta_info(
+        sampling_params=sampling_params,
+        meta_info={"eos_token_id": 151645, "pad_token_id": 151643},
+        ignore_eos=False,
+    )
+
+    assert updated["stop_token_ids"] == [151645]
+
+
+def test_inject_stop_token_ids_from_meta_info_respects_existing_stop_tokens():
+    sampling_params = {"temperature": 0.0, "stop_token_ids": [42]}
+
+    updated = _inject_stop_token_ids_from_meta_info(
+        sampling_params=sampling_params,
+        meta_info={"eos_token_id": 151645},
+        ignore_eos=False,
+    )
+
+    assert updated["stop_token_ids"] == [42]
