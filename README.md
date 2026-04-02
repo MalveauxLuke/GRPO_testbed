@@ -34,6 +34,8 @@ That means:
 - `fit_2gpu_smoke`: 40-minute extended preflight
 - `fit_2gpu`: the main run
 
+The 2-GPU GSM8K preflight/full wrappers explicitly request `128G` of host RAM. This is intentional: without an explicit `--mem`, SOL was applying the small default GPU job memory limit and the run was failing with Slurm `OUT_OF_MEMORY` before the actual fit question was answered.
+
 All checked-in run wrappers now emit:
 
 - console logs in the Slurm output
