@@ -137,6 +137,7 @@ cmd=(
   "actor_rollout_ref.rollout.prompt_length=${GSM8K_MODERN_MAX_PROMPT_LENGTH:-512}"
   "actor_rollout_ref.rollout.response_length=${GSM8K_MODERN_MAX_RESPONSE_LENGTH:-1024}"
   "actor_rollout_ref.rollout.enforce_eager=${GSM8K_MODERN_ROLLOUT_ENFORCE_EAGER:-True}"
+  "actor_rollout_ref.rollout.skip_tokenizer_init=${GSM8K_MODERN_SKIP_TOKENIZER_INIT:-True}"
   "actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE}"
   "actor_rollout_ref.rollout.tensor_model_parallel_size=${GSM8K_MODERN_TP_SIZE:-1}"
   "actor_rollout_ref.rollout.name=vllm"
@@ -148,7 +149,6 @@ cmd=(
   "actor_rollout_ref.rollout.enable_chunked_prefill=${GSM8K_MODERN_ENABLE_CHUNKED_PREFILL:-False}"
   "actor_rollout_ref.rollout.load_format=safetensors"
   "actor_rollout_ref.rollout.layered_summon=True"
-  "+actor_rollout_ref.rollout.engine_kwargs.vllm.skip_tokenizer_init=${GSM8K_MODERN_SKIP_TOKENIZER_INIT:-True}"
   "+actor_rollout_ref.rollout.engine_kwargs.vllm.max_parallel_loading_workers=${GSM8K_MODERN_MAX_PARALLEL_LOADING_WORKERS:-1}"
   "actor_rollout_ref.rollout.agent.num_workers=${GSM8K_MODERN_AGENT_NUM_WORKERS:-1}"
   "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${REF_LOGPROB_MICRO_BATCH_SIZE}"
@@ -171,6 +171,10 @@ cmd=(
 
 if [[ -n "${GSM8K_MODERN_TOTAL_TRAINING_STEPS:-}" ]]; then
   cmd+=("trainer.total_training_steps=${GSM8K_MODERN_TOTAL_TRAINING_STEPS}")
+fi
+
+if [[ -n "${GSM8K_MODERN_VAL_MAX_SAMPLES:-}" ]]; then
+  cmd+=("data.val_max_samples=${GSM8K_MODERN_VAL_MAX_SAMPLES}")
 fi
 
 if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then

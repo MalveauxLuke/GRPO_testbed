@@ -218,6 +218,9 @@ class vLLMHttpServer:
             engine_kwargs["limit_mm_per_prompt"] = {"image": self.config.get("limit_images")}
         if self.config.cudagraph_capture_sizes:
             engine_kwargs["cuda_graph_sizes"] = self.config.cudagraph_capture_sizes
+        # Keep rollout.skip_tokenizer_init authoritative instead of allowing a raw
+        # engine kwarg override to silently diverge from the typed config.
+        engine_kwargs.pop("skip_tokenizer_init", None)
 
         # Override default generation config from hugging face model config,
         # user can still override them by passing kwargs in each request.
@@ -302,7 +305,7 @@ class vLLMHttpServer:
         args = {
             "dtype": self.config.dtype,
             "load_format": self.config.load_format,
-            "skip_tokenizer_init": False,
+            "skip_tokenizer_init": self.config.skip_tokenizer_init,
             "distributed_executor_backend": "mp",
             "worker_extension_cls": "verl.workers.rollout.vllm_rollout.utils.vLLMColocateWorkerExtension",
             "trust_remote_code": self.model_config.trust_remote_code,

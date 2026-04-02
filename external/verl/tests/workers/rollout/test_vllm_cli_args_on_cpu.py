@@ -16,6 +16,7 @@ import json
 
 import pytest
 
+from verl.workers.config.rollout import RolloutConfig
 from verl.workers.rollout.vllm_rollout.utils import build_cli_args_from_config
 
 
@@ -127,6 +128,23 @@ class TestBuildCliArgsFromConfig:
         config = {"sizes": [42]}
         result = build_cli_args_from_config(config)
         assert result == ["--sizes", "42"]
+
+    def test_skip_tokenizer_init_true(self):
+        """skip_tokenizer_init=True emits the vLLM flag."""
+        config = {"skip_tokenizer_init": True}
+        result = build_cli_args_from_config(config)
+        assert result == ["--skip_tokenizer_init"]
+
+    def test_skip_tokenizer_init_false(self):
+        """skip_tokenizer_init=False omits the vLLM flag."""
+        config = {"skip_tokenizer_init": False}
+        result = build_cli_args_from_config(config)
+        assert result == []
+
+
+def test_rollout_config_defaults_to_skip_tokenizer_init():
+    config = RolloutConfig()
+    assert config.skip_tokenizer_init is True
 
 
 if __name__ == "__main__":
