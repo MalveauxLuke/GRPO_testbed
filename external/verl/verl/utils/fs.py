@@ -192,6 +192,29 @@ def _check_directory_structure(folder_path, record_file):
     return existing_entries == recorded_entries
 
 
+def _resolve_hf_model_to_local(src: str, cache_dir=None, always_recopy: bool = False, verbose: bool = False) -> str:
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as exc:
+        raise RuntimeError(
+            f"Failed to resolve Hugging Face model id '{src}' because huggingface_hub is not installed."
+        ) from exc
+
+    if verbose:
+        print(f"Download from Hugging Face {src}")
+
+    try:
+        resolved = snapshot_download(src, cache_dir=cache_dir, force_download=always_recopy)
+    except Exception as exc:
+        raise RuntimeError(f"Failed to resolve Hugging Face model id '{src}' to a local path: {exc}") from exc
+
+    if not isinstance(resolved, str) or not os.path.exists(resolved):
+        raise RuntimeError(
+            f"Hugging Face model id '{src}' resolved to '{resolved}', but that local path does not exist."
+        )
+    return resolved
+
+
 def copy_to_local(
     src: str, cache_dir=None, filelock=".file.lock", verbose=False, always_recopy=False, use_shm: bool = False
 ) -> str:
@@ -211,17 +234,8 @@ def copy_to_local(
     # Save to a local path for persistence.
     local_path = copy_local_path_from_hdfs(src, cache_dir, filelock, verbose, always_recopy)
 
-    if use_shm and isinstance(local_path, str) and not os.path.exists(local_path):
-        try:
-            from huggingface_hub import snapshot_download
-
-            resolved = snapshot_download(local_path)
-            if isinstance(resolved, str) and os.path.exists(resolved):
-                local_path = resolved
-        except ImportError:
-            pass
-        except Exception as e:
-            print(f"WARNING: Failed to download model from Hugging Face: {e}")
+    if isinstance(local_path, str) and not os.path.exists(local_path):
+        local_path = _resolve_hf_model_to_local(local_path, cache_dir=cache_dir, always_recopy=always_recopy, verbose=verbose)
 
     # Load into shm to improve efficiency.
     if use_shm:

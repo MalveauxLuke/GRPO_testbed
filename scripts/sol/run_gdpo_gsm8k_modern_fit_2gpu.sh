@@ -76,6 +76,7 @@ sol_msg "TensorBoard dir: ${TENSORBOARD_DIR}"
 sol_msg "File logger path: ${VERL_FILE_LOGGER_PATH}"
 sol_msg "GDPO saturation event log: ${GDPO_SATURATION_EVENT_LOG_PATH}"
 sol_msg "Diagnostics log: ${FIT_DIAGNOSTICS_LOG}"
+sol_log_python_package_versions
 sol_log_run_contract \
   "gsm8k_modern_two_reward_gdpo" \
   "${RUNTIME_PROFILE}" \

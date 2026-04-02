@@ -143,6 +143,19 @@ sol_python() {
   printf '%s\n' "${CONDA_PREFIX}/bin/python"
 }
 
+sol_log_python_package_versions() {
+  "$(sol_python)" - <<'PY'
+import importlib.metadata
+
+for package_name in ("vllm", "huggingface_hub", "tqdm", "transformers"):
+    try:
+        version = importlib.metadata.version(package_name)
+    except importlib.metadata.PackageNotFoundError:
+        version = "<missing>"
+    print(f"[sol-setup] package {package_name}={version}")
+PY
+}
+
 sol_require_slurm_allocation() {
   [[ -n "${SLURM_JOB_ID:-}" ]] || sol_fail "Run this from a Slurm compute allocation, for example: salloc -p lightwork -q public -t 02:00:00 -c 4"
 }

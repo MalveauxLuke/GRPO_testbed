@@ -13,7 +13,11 @@
 # limitations under the License.
 
 import os
+import sys
+import types
 from pathlib import Path
+
+import pytest
 
 import verl.utils.fs as fs
 
@@ -92,3 +96,69 @@ def test_always_recopy_flag(tmp_path, monkeypatch):
     # Subsequent normal call (always_recopy=False)
     fs.copy_to_local(hdfs_path, cache_dir=test_cache)
     assert copy_call_count == 2  # Should not increment
+
+
+def test_copy_hf_model_id_to_local_without_shm(tmp_path, monkeypatch):
+    model_id = "Qwen/Qwen2.5-3B-Instruct"
+    resolved_dir = tmp_path / "hf-model"
+    resolved_dir.mkdir()
+
+    fake_hf = types.ModuleType("huggingface_hub")
+    snapshot_calls = []
+
+    def fake_snapshot_download(src, cache_dir=None, force_download=False):
+        snapshot_calls.append((src, cache_dir, force_download))
+        return str(resolved_dir)
+
+    fake_hf.snapshot_download = fake_snapshot_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+
+    local_path = fs.copy_to_local(model_id, cache_dir=tmp_path, use_shm=False)
+
+    assert local_path == str(resolved_dir)
+    assert snapshot_calls == [(model_id, tmp_path, False)]
+
+
+def test_copy_hf_model_id_to_local_before_copying_to_shm(tmp_path, monkeypatch):
+    model_id = "Qwen/Qwen2.5-3B-Instruct"
+    resolved_dir = tmp_path / "hf-model"
+    resolved_dir.mkdir()
+
+    fake_hf = types.ModuleType("huggingface_hub")
+
+    def fake_snapshot_download(src, cache_dir=None, force_download=False):
+        assert src == model_id
+        assert cache_dir == tmp_path
+        assert force_download is False
+        return str(resolved_dir)
+
+    fake_hf.snapshot_download = fake_snapshot_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+
+    shm_calls = []
+
+    def fake_copy_to_shm(src):
+        shm_calls.append(src)
+        return f"/dev/shm/{Path(src).name}"
+
+    monkeypatch.setattr(fs, "copy_to_shm", fake_copy_to_shm)
+
+    local_path = fs.copy_to_local(model_id, cache_dir=tmp_path, use_shm=True)
+
+    assert shm_calls == [str(resolved_dir)]
+    assert local_path == f"/dev/shm/{resolved_dir.name}"
+
+
+def test_copy_hf_model_id_raises_when_resolution_fails(tmp_path, monkeypatch):
+    model_id = "Qwen/Qwen2.5-3B-Instruct"
+
+    fake_hf = types.ModuleType("huggingface_hub")
+
+    def fake_snapshot_download(src, cache_dir=None, force_download=False):
+        raise ValueError("bad download")
+
+    fake_hf.snapshot_download = fake_snapshot_download
+    monkeypatch.setitem(sys.modules, "huggingface_hub", fake_hf)
+
+    with pytest.raises(RuntimeError, match="Failed to resolve Hugging Face model id"):
+        fs.copy_to_local(model_id, cache_dir=tmp_path, use_shm=False)

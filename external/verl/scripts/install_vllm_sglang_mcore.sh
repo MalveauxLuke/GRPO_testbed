@@ -21,6 +21,7 @@ echo "pyext is lack of maintainace and cannot work with python 3.12."
 echo "if you need it for prime code rewarding, please install using patched fork:"
 echo "pip install git+https://github.com/ShaohonChen/PyExt.git@py311support"
 
+pip uninstall -y pynvml nvidia-ml-py || true
 pip install "nvidia-ml-py>=12.560.30" "fastapi[standard]>=0.115.0" "optree>=0.13.0" "pydantic>=2.9" "grpcio>=1.62.1"
 
 
