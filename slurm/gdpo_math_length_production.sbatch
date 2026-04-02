@@ -1,4 +1,12 @@
 #!/usr/bin/env bash
+# Config provenance:
+# - Semantic baseline: DeepScaleR-style boxed-answer math reward (`correct_reward + length_reward`).
+# - Runtime profile: reference_public.
+# - Entry type: full-run Slurm entrypoint for math-length GDPO production.
+# - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_math_length_production.sh
+# - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_math_length_common.sh
+# - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md
+# - Required manual gate before edits: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_config_creation_checklist.md
 # Submit with an optional account override:
 #   sbatch -A grp_<your_group> slurm/gdpo_math_length_production.sbatch
 # Or:

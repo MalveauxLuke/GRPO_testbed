@@ -1,4 +1,11 @@
 #!/usr/bin/env bash
+# Config provenance:
+# - Semantic baseline: DeepScaleR-style boxed-answer math reward (`correct_reward + length_reward`).
+# - Runtime profiles served here: debug_safe (debug) and reference_public (production).
+# - Upstream anchors: external/verl/examples/grpo_trainer/run_qwen2-7b_math.sh and external/verl/examples/gdpo_trainer/run_qwen1_5b_gdpo.sh
+# - Closest prior working local config: /Users/god/Documents/VERL_GRPO/docs/asu_sol_upstream_verl_grpo.md
+# - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md
+# - Required manual gate before edits: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_config_creation_checklist.md
 set -euo pipefail
 
 ADV_ESTIMATOR="${1:-}"
@@ -59,6 +66,9 @@ case "${PROFILE}" in
     MAX_NUM_GEN_BATCHES="${MATH_LENGTH_MAX_NUM_GEN_BATCHES:-10}"
     MODEL_PATH="${MATH_LENGTH_MODEL_PATH:-${MODEL_PATH_DEFAULT}}"
     EXPERIMENT_NAME="${MATH_LENGTH_EXPERIMENT_NAME:-${MODEL_PATH##*/}_${ADV_ESTIMATOR}_math_length_sol_debug}"
+    RUNTIME_PROFILE="${MATH_LENGTH_RUNTIME_PROFILE:-debug_safe}"
+    RUN_CLASSIFICATION="${MATH_LENGTH_RUN_CLASSIFICATION:-integration-smoke}"
+    LOCAL_PARENT_CONFIG="/Users/god/Documents/VERL_GRPO/scripts/sol/run_${ADV_ESTIMATOR}_math_length_debug.sh"
     ;;
   production)
     DATASET_DIR="${DEEPSCALER_DIR}"
@@ -84,6 +94,9 @@ case "${PROFILE}" in
     MAX_NUM_GEN_BATCHES="${MATH_LENGTH_MAX_NUM_GEN_BATCHES:-10}"
     MODEL_PATH="${MATH_LENGTH_MODEL_PATH:-${MODEL_PATH_DEFAULT}}"
     EXPERIMENT_NAME="${MATH_LENGTH_EXPERIMENT_NAME:-${MODEL_PATH##*/}_${ADV_ESTIMATOR}_math_length_sol}"
+    RUNTIME_PROFILE="${MATH_LENGTH_RUNTIME_PROFILE:-reference_public}"
+    RUN_CLASSIFICATION="${MATH_LENGTH_RUN_CLASSIFICATION:-full-run}"
+    LOCAL_PARENT_CONFIG="/Users/god/Documents/VERL_GRPO/scripts/sol/run_${ADV_ESTIMATOR}_math_length_production.sh"
     ;;
 esac
 
@@ -95,6 +108,21 @@ RUN_ROOT="${OUTPUT_ROOT}/math_length/${PROFILE}/${ADV_ESTIMATOR}/${RUN_TAG}"
 LOCAL_CKPT_DIR="${CHECKPOINT_ROOT}/${EXPERIMENT_NAME}/${RUN_TAG}"
 PROJECT_NAME="${MATH_LENGTH_PROJECT_NAME:-${SOL_PROJECT_NAME}_${ADV_ESTIMATOR}_math_length}"
 ROLLOUT_DATA_DIR="${MATH_LENGTH_ROLLOUT_DATA_DIR:-}"
+N_GPUS_PER_NODE="${MATH_LENGTH_N_GPUS_PER_NODE:-1}"
+NNODES="${MATH_LENGTH_NNODES:-1}"
+TOTAL_GPUS=$((N_GPUS_PER_NODE * NNODES))
+POST_RUN_AUDIT_CMD='python scripts/sol/audit_math_length_rewards.py recompute-summary --input-path "$MATH_LENGTH_ROLLOUT_DATA_DIR" --input-type rollout'
+
+NORMALIZED_PPO_MINI_BATCH_SIZE="$(sol_resolve_normalized_actor_mini_batch "${TOTAL_GPUS}" "${ROLLOUT_N}" "${PPO_MINI_BATCH_SIZE}")"
+ROLLOUT_LOGPROB_MICRO_BATCH_SIZE="${MATH_LENGTH_ROLLOUT_LOGPROB_MICRO_BATCH_SIZE:-1}"
+REF_LOGPROB_MICRO_BATCH_SIZE="${MATH_LENGTH_REF_LOGPROB_MICRO_BATCH_SIZE:-1}"
+
+sol_validate_micro_batch_divides_normalized \
+  "${NORMALIZED_PPO_MINI_BATCH_SIZE}" "${PPO_MICRO_BATCH_SIZE}" "actor.ppo_micro_batch_size_per_gpu"
+sol_validate_micro_batch_divides_normalized \
+  "${NORMALIZED_PPO_MINI_BATCH_SIZE}" "${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE}" "rollout.log_prob_micro_batch_size_per_gpu"
+sol_validate_micro_batch_divides_normalized \
+  "${NORMALIZED_PPO_MINI_BATCH_SIZE}" "${REF_LOGPROB_MICRO_BATCH_SIZE}" "ref.log_prob_micro_batch_size_per_gpu"
 
 sol_prepare_tracking_paths "${PROJECT_NAME}" "${EXPERIMENT_NAME}" "${RUN_TAG}"
 if [[ "${ADV_ESTIMATOR}" == "gdpo" ]]; then
@@ -112,6 +140,22 @@ sol_msg "Run root: ${RUN_ROOT}"
 sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
 sol_msg "TensorBoard dir: ${TENSORBOARD_DIR}"
 sol_msg "File logger path: ${VERL_FILE_LOGGER_PATH}"
+sol_log_run_contract \
+  "deepscaler_math_length_${ADV_ESTIMATOR}" \
+  "${RUNTIME_PROFILE}" \
+  "${RUN_CLASSIFICATION}" \
+  "external/verl/examples/grpo_trainer/run_qwen2-7b_math.sh + external/verl/examples/gdpo_trainer/run_qwen1_5b_gdpo.sh" \
+  "${LOCAL_PARENT_CONFIG}" \
+  "${POST_RUN_AUDIT_CMD}"
+sol_log_batch_math \
+  "${TOTAL_GPUS}" \
+  "${ROLLOUT_N}" \
+  "${PPO_MINI_BATCH_SIZE}" \
+  "${NORMALIZED_PPO_MINI_BATCH_SIZE}" \
+  "${PPO_MICRO_BATCH_SIZE}" \
+  "${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE}" \
+  "${REF_LOGPROB_MICRO_BATCH_SIZE}"
+sol_msg "SOL rollout compatibility: actor/ref attention=eager, rollout.enforce_eager=True, use_remove_padding=False, skip_tokenizer_init=True, agent.num_workers=1"
 if [[ "${ADV_ESTIMATOR}" == "gdpo" ]]; then
   sol_msg "GDPO saturation event log: ${GDPO_SATURATION_EVENT_LOG_PATH}"
 fi
@@ -153,7 +197,8 @@ cmd=(
   "actor_rollout_ref.actor.use_dynamic_bsz=${USE_DYNAMIC_BSZ}"
   "actor_rollout_ref.rollout.prompt_length=${MAX_PROMPT_LENGTH}"
   "actor_rollout_ref.rollout.response_length=${MAX_RESPONSE_LENGTH}"
-  "actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1"
+  "actor_rollout_ref.rollout.enforce_eager=True"
+  "actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE}"
   "actor_rollout_ref.rollout.tensor_model_parallel_size=1"
   "actor_rollout_ref.rollout.name=vllm"
   "actor_rollout_ref.rollout.gpu_memory_utilization=${GPU_MEMORY_UTILIZATION}"
@@ -163,7 +208,7 @@ cmd=(
   "actor_rollout_ref.rollout.agent.num_workers=1"
   "actor_rollout_ref.rollout.n=${ROLLOUT_N}"
   "actor_rollout_ref.rollout.log_prob_use_dynamic_bsz=${USE_DYNAMIC_BSZ}"
-  "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1"
+  "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${REF_LOGPROB_MICRO_BATCH_SIZE}"
   "actor_rollout_ref.ref.log_prob_use_dynamic_bsz=${USE_DYNAMIC_BSZ}"
   "actor_rollout_ref.ref.fsdp_config.param_offload=True"
   "+actor_rollout_ref.ref.model.override_config.attn_implementation=eager"
@@ -176,8 +221,8 @@ cmd=(
   "trainer.logger=[\"console\",\"tensorboard\",\"file\"]"
   "trainer.project_name=${PROJECT_NAME}"
   "trainer.experiment_name=${EXPERIMENT_NAME}"
-  "trainer.n_gpus_per_node=${MATH_LENGTH_N_GPUS_PER_NODE:-1}"
-  "trainer.nnodes=${MATH_LENGTH_NNODES:-1}"
+  "trainer.n_gpus_per_node=${N_GPUS_PER_NODE}"
+  "trainer.nnodes=${NNODES}"
   "trainer.save_freq=${SAVE_FREQ}"
   "trainer.test_freq=${TEST_FREQ}"
   "trainer.total_training_steps=${TOTAL_TRAINING_STEPS}"

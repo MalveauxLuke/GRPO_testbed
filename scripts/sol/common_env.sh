@@ -210,3 +210,126 @@ sol_prepare_gdpo_saturation_event_log_path() {
   export GDPO_SATURATION_EVENT_LOG_PATH="${GDPO_SATURATION_EVENT_LOG_PATH:-${VERL_FILE_LOGGER_PATH%.jsonl}.gdpo_saturation_events.jsonl}"
   mkdir -p "$(dirname "${GDPO_SATURATION_EVENT_LOG_PATH}")"
 }
+
+sol_require_runtime_profile() {
+  local runtime_profile="${1:-}"
+  case "${runtime_profile}" in
+    reference_public|sol_fit_2gpu|debug_safe) ;;
+    *)
+      sol_fail \
+        "Unsupported runtime profile '${runtime_profile}'. Expected one of: reference_public, sol_fit_2gpu, debug_safe."
+      ;;
+  esac
+}
+
+sol_require_run_classification() {
+  local run_classification="${1:-}"
+  case "${run_classification}" in
+    feasibility-smoke|integration-smoke|full-run) ;;
+    *)
+      sol_fail \
+        "Unsupported run classification '${run_classification}'. Expected one of: feasibility-smoke, integration-smoke, full-run."
+      ;;
+  esac
+}
+
+sol_resolve_normalized_actor_mini_batch() {
+  local total_gpus="${1:-}"
+  local rollout_n="${2:-}"
+  local ppo_mini_batch_size="${3:-}"
+
+  [[ -n "${total_gpus}" && -n "${rollout_n}" && -n "${ppo_mini_batch_size}" ]] || sol_fail \
+    "sol_resolve_normalized_actor_mini_batch expects: <total_gpus> <rollout_n> <ppo_mini_batch_size>."
+  (( total_gpus > 0 )) || sol_fail "Expected total_gpus > 0, got ${total_gpus}."
+  (( rollout_n > 0 )) || sol_fail "Expected rollout_n > 0, got ${rollout_n}."
+  (( ppo_mini_batch_size > 0 )) || sol_fail "Expected ppo_mini_batch_size > 0, got ${ppo_mini_batch_size}."
+  (( (ppo_mini_batch_size * rollout_n) % total_gpus == 0 )) || sol_fail \
+    "Invalid config: ppo_mini_batch_size (${ppo_mini_batch_size}) * rollout.n (${rollout_n}) must be divisible by total_gpus (${total_gpus})."
+
+  printf '%s\n' "$((ppo_mini_batch_size * rollout_n / total_gpus))"
+}
+
+sol_validate_micro_batch_divides_normalized() {
+  local normalized_mini_batch="${1:-}"
+  local micro_batch_value="${2:-}"
+  local micro_batch_label="${3:-micro_batch}"
+
+  [[ -n "${normalized_mini_batch}" ]] || sol_fail "Expected normalized_mini_batch to be set."
+  if [[ -z "${micro_batch_value}" || "${micro_batch_value}" == "None" ]]; then
+    return 0
+  fi
+
+  (( micro_batch_value > 0 )) || sol_fail \
+    "${micro_batch_label} must be > 0 when provided, got ${micro_batch_value}."
+  (( normalized_mini_batch % micro_batch_value == 0 )) || sol_fail \
+    "Invalid config: normalized actor mini-batch (${normalized_mini_batch}) must be divisible by ${micro_batch_label} (${micro_batch_value})."
+}
+
+sol_require_post_run_audit_command() {
+  local post_run_audit_cmd="${1:-}"
+  [[ -n "${post_run_audit_cmd}" ]] || sol_fail \
+    "Each active wrapper must declare a post-run audit command."
+}
+
+sol_log_run_contract() {
+  local semantic_baseline="${1:-}"
+  local runtime_profile="${2:-}"
+  local run_classification="${3:-}"
+  local upstream_anchor="${4:-}"
+  local local_parent="${5:-}"
+  local post_run_audit_cmd="${6:-}"
+
+  sol_require_runtime_profile "${runtime_profile}"
+  sol_require_run_classification "${run_classification}"
+  sol_require_post_run_audit_command "${post_run_audit_cmd}"
+
+  sol_msg "Semantic baseline: ${semantic_baseline}"
+  sol_msg "Runtime profile: ${runtime_profile}"
+  sol_msg "Run classification: ${run_classification}"
+  sol_msg "Upstream anchor: ${upstream_anchor}"
+  sol_msg "Closest prior local config: ${local_parent}"
+  sol_msg "Post-run audit: ${post_run_audit_cmd}"
+}
+
+sol_log_batch_math() {
+  local total_gpus="${1:-}"
+  local rollout_n="${2:-}"
+  local ppo_mini_batch_size="${3:-}"
+  local normalized_mini_batch="${4:-}"
+  local actor_micro_batch="${5:-}"
+  local rollout_micro_batch="${6:-}"
+  local ref_micro_batch="${7:-}"
+
+  sol_msg "Batch math: total_gpus=${total_gpus}, rollout.n=${rollout_n}, actor.ppo_mini_batch_size=${ppo_mini_batch_size}"
+  sol_msg "Normalized actor mini-batch after rollout/GPU split: ${normalized_mini_batch}"
+  sol_msg "Per-GPU micro-batches: actor=${actor_micro_batch}, rollout_logprob=${rollout_micro_batch}, ref_logprob=${ref_micro_batch}"
+}
+
+sol_start_resource_sampler() {
+  local log_path="${1:-}"
+  local interval_seconds="${2:-5}"
+  [[ -n "${log_path}" ]] || sol_fail "sol_start_resource_sampler expects a log path."
+
+  mkdir -p "$(dirname "${log_path}")"
+  (
+    while true; do
+      {
+        printf '===== %s =====\n' "$(date +"%Y-%m-%d %H:%M:%S %Z")"
+        if command -v nvidia-smi >/dev/null 2>&1; then
+          nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu --format=csv,noheader || true
+        else
+          printf 'nvidia-smi not available on PATH\n'
+        fi
+        if command -v free >/dev/null 2>&1; then
+          free -h || true
+        else
+          printf 'free not available on PATH\n'
+        fi
+        ps -eo pid,ppid,rss,comm,args | awk 'NR == 1 || /ray|python|vllm/' | head -n 40 || true
+        printf '\n'
+      } >> "${log_path}" 2>&1
+      sleep "${interval_seconds}"
+    done
+  ) &
+  export SOL_RESOURCE_SAMPLER_PID="$!"
+}

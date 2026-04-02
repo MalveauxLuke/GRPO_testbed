@@ -2,7 +2,7 @@
 
 This repo provides a SOL-compliant wrapper around official upstream `verl` GRPO and GDPO, with the working `v0.7.1` source vendored under `external/verl`.
 
-Start with [docs/asu_sol_upstream_verl_grpo.md](/Users/god/Documents/VERL_GRPO/docs/asu_sol_upstream_verl_grpo.md). If you want the shortest possible "fresh SSH session" command order, use [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md).
+Start with [docs/asu_sol_upstream_verl_grpo.md](/Users/god/Documents/VERL_GRPO/docs/asu_sol_upstream_verl_grpo.md). If you want the shared launcher/fit rules across GSM8K and math, use [docs/sol_rl_fit_guide.md](/Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_guide.md). If you want the shortest possible "fresh SSH session" command order, use [docs/sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md).
 
 Then use the helper scripts in [scripts/sol](/Users/god/Documents/VERL_GRPO/scripts/sol) and the Slurm entrypoints in [slurm](/Users/god/Documents/VERL_GRPO/slurm).
 
@@ -11,6 +11,28 @@ The checked-in debug validation path is now designed to work with a plain:
 ```bash
 sbatch slurm/grpo_debug_validation.sbatch
 ```
+
+For fast preflight checks before you spend time on longer smoke/full jobs, use:
+
+```bash
+sbatch slurm/gdpo_gsm8k_modern_fit_debug.sbatch
+sbatch slurm/grpo_math_length_debug.sbatch
+sbatch slurm/gdpo_math_length_debug.sbatch
+```
+
+For GSM8K, the intended stage order is now:
+
+```bash
+sbatch slurm/gdpo_gsm8k_modern_fit_debug.sbatch
+sbatch slurm/gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch
+sbatch slurm/gdpo_gsm8k_modern_fit_2gpu.sbatch
+```
+
+That means:
+
+- `fit_debug`: 15-minute preflight to catch immediate init/load failures
+- `fit_2gpu_smoke`: 40-minute extended preflight
+- `fit_2gpu`: the main run
 
 All checked-in run wrappers now emit:
 
@@ -36,6 +58,15 @@ Those depend on the ToolRL `rlla_4k` dataset staged by:
 ```bash
 ./scripts/sol/prepare_rlla_toolrl.sh
 ```
+
+For the recommended 2-GPU modern GSM8K path on SOL, use:
+
+```bash
+sbatch slurm/gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch
+sbatch slurm/gdpo_gsm8k_modern_fit_2gpu.sbatch
+```
+
+The older "realistic" GSM8K 3B wrapper remains available as the `reference_public` profile for public-example comparison, but it is no longer the default 2-GPU recommendation.
 
 For the primary DeepScaleR-style math reasoning path, first build the boxed-answer math parquet files:
 

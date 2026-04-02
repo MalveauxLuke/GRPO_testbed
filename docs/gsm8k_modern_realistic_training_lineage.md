@@ -2,13 +2,25 @@
 
 This run configuration is intended to be a realistic, public-example-like training environment for measuring GDPO saturation on the already-verified modern GSM8K two-reward baseline.
 
+It is now the `reference_public` profile for this workflow, not the recommended default 2-GPU SOL path.
+
+For the recommended constrained-hardware path, use:
+
+- [run_gdpo_gsm8k_modern_fit_2gpu.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh)
+- [gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch)
+- [gdpo_gsm8k_modern_fit_2gpu.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu.sbatch)
+
 Future GSM8K variants must cite:
 
 - one upstream anchor
 - one closest prior working GSM8K config
-- one prior failure or caution from [gsm8k_modern_error_catalog.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_error_catalog.md)
+- one prior failure or caution from [sol_rl_fit_error_catalog.md](/Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md)
 
-Use [gsm8k_modern_config_creation_checklist.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_config_creation_checklist.md) before creating a new GSM8K wrapper or sbatch.
+Use [sol_rl_fit_config_creation_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_config_creation_checklist.md) before creating a new GSM8K wrapper or sbatch.
+
+Shared profile guidance lives in:
+
+- [sol_rl_fit_guide.md](/Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_guide.md)
 
 ## Source lineage
 
@@ -77,7 +89,7 @@ These are compatibility choices learned from prior SOL failures, not algorithmic
 
 ## Known Historical Failure Modes For This Path
 
-The GSM8K modern realistic path must be read together with [gsm8k_modern_error_catalog.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_error_catalog.md). The failure classes that have already mattered here are:
+The GSM8K modern realistic path must be read together with [sol_rl_fit_error_catalog.md](/Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md). The failure classes that have already mattered here are:
 
 - wrong env/interpreter or missing package
 - Slurm QoS and walltime mismatch
@@ -94,6 +106,7 @@ These are considered historical constraints on this path, not hypothetical edge 
 - It preserves the verified GSM8K dataset/reward stack from the debug wrapper instead of introducing new reward semantics.
 - It keeps the SOL-compatible eager-attention override that the smaller debug path already needed.
 - It computes the normalized actor mini-batch and derives default micro-batches from it, instead of copying the official public values unchanged.
+- It is explicitly documented as the `reference_public` profile so it is no longer confused with the new 2-GPU SOL fit-first path.
 - Its smoke wrapper is intended to be a feasibility-smoke entrypoint, meaning it should preserve the realistic memory shape and only shorten duration and cadence.
 - It keeps rollout dumping opt-in so surprising runtime behavior can be checked with `artifact-audit` instead of interpreted from curves alone.
 

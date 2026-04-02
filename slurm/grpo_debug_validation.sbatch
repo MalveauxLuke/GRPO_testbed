@@ -5,7 +5,7 @@
 #   SOL_ACCOUNT=grp_<your_group> sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/grpo_debug_validation.sbatch
 # The checked-in debug wrapper already contains the validated SOL-compatible fallback profile.
 #SBATCH --job-name=verl-grpo-debug
-#SBATCH --partition=public
+#SBATCH --partition=htc
 #SBATCH --qos=debug
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

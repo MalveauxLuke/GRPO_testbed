@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
+# Config provenance:
+# - Semantic baseline: DeepScaleR-style boxed-answer math reward (`correct_reward + length_reward`).
+# - Runtime profile: debug_safe.
+# - Entry type: integration-smoke Slurm entrypoint for math-length GRPO debug.
+# - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_grpo_math_length_debug.sh
+# - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_math_length_common.sh
+# - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md
+# - Required manual gate before edits: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_config_creation_checklist.md
 # Submit with an optional account override:
 #   sbatch -A grp_<your_group> slurm/grpo_math_length_debug.sbatch
 # Or:
 #   SOL_ACCOUNT=grp_<your_group> sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/grpo_math_length_debug.sbatch
 # This submits the DeepScaleR-style correctness+length GRPO debug wrapper.
 #SBATCH --job-name=verl-grpo-math-length-debug
-#SBATCH --partition=public
+#SBATCH --partition=htc
 #SBATCH --qos=debug
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

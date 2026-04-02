@@ -5,9 +5,10 @@
 #   SOL_ACCOUNT=grp_<your_group> sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/gdpo_gsm8k_modern_debug.sbatch
 # Optional rollout dump capture:
 #   GSM8K_MODERN_ROLLOUT_DATA_DIR=/scratch/$USER/verl-grpo/rollout_dumps/gsm8k_modern sbatch slurm/gdpo_gsm8k_modern_debug.sbatch
-# This wrapper keeps existing GSM8K and archived probe baselines untouched.
-#SBATCH --job-name=verl-gdpo-gsm8k-modern-debug
-#SBATCH --partition=public
+# Legacy compatibility path retained for historical verification notes.
+# Prefer: slurm/gdpo_gsm8k_modern_fit_debug.sbatch
+#SBATCH --job-name=legacy-verl-gdpo-gsm8k-modern-debug
+#SBATCH --partition=htc
 #SBATCH --qos=debug
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -35,6 +36,7 @@ JOB_LOG="${LOG_ROOT}/slurm-${SLURM_JOB_NAME}-${SLURM_JOB_ID}.log"
 exec > >(tee -a "${JOB_LOG}") 2>&1
 
 sol_msg "Scratch log: ${JOB_LOG}"
-sol_msg "Submitting modern 2-reward GSM8K GDPO debug wrapper from ${PROJECT_ROOT}."
+sol_msg "Submitting LEGACY modern 2-reward GSM8K GDPO debug wrapper from ${PROJECT_ROOT}."
+sol_msg "Preferred active GSM8K debug/preflight path: slurm/gdpo_gsm8k_modern_fit_debug.sbatch"
 
 "${PROJECT_ROOT}/scripts/sol/run_gdpo_gsm8k_modern_debug.sh" "$@"
