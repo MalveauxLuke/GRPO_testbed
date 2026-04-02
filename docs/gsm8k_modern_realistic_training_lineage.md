@@ -2,6 +2,14 @@
 
 This run configuration is intended to be a realistic, public-example-like training environment for measuring GDPO saturation on the already-verified modern GSM8K two-reward baseline.
 
+Future GSM8K variants must cite:
+
+- one upstream anchor
+- one closest prior working GSM8K config
+- one prior failure or caution from [gsm8k_modern_error_catalog.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_error_catalog.md)
+
+Use [gsm8k_modern_config_creation_checklist.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_config_creation_checklist.md) before creating a new GSM8K wrapper or sbatch.
+
 ## Source lineage
 
 Primary environment anchor:
@@ -20,7 +28,11 @@ Local verified baseline reused without semantic changes:
 - verifier:
   - [verify_gsm8k_modern_baseline.py](/Users/god/Documents/VERL_GRPO/scripts/sol/verify_gsm8k_modern_baseline.py)
 
-## What this realistic script preserves from the public 3B Qwen GSM8K setup
+Closest prior working GSM8K local config:
+- [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh)
+  - this is the verified smaller-scale GSM8K run path whose dataset, reward behavior, and runtime reward logging were already audited in [gsm8k_modern_two_reward_verification_proof.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_two_reward_verification_proof.md)
+
+## Inherited Public Defaults
 
 - `Qwen/Qwen2.5-3B-Instruct`
 - LoRA training with `lora_rank=64`, `lora_alpha=32`, `target_modules=all-linear`
@@ -37,14 +49,22 @@ Local verified baseline reused without semantic changes:
 
 These values come from the official public Qwen2.5-3B GSM8K GRPO-LoRA script, not from the earlier local debug wrapper.
 
-## What this realistic script changes intentionally
+## SOL-Required Compatibility Overrides
+
+- forces HF actor attention to `eager` on SOL
+- forces HF ref attention to `eager` on SOL
+- keeps the hardened launcher/env flow from [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh)
+- preserves the optional rollout-dump hook so failed or surprising runs can still be audited offline
+
+These are compatibility choices learned from prior SOL failures, not algorithmic changes to the GSM8K baseline.
+
+## Intentional GSM8K/GDPO Deviations
 
 - switches `algorithm.adv_estimator` from `grpo` to `gdpo`
 - uses `algorithm.gdpo_reward_keys=["correct_reward","format_reward"]`
 - keeps the already-verified GSM8K modern structured-output dataset and reward function
 - sets `rollout.n=4` instead of `5` to align with the grouped multi-reward GDPO-style setup
-- sets actor / rollout / ref micro-batches to `32` instead of the official script's `40`, because with `rollout.n=4` and `2` GPUs the normalized actor mini-batch is `32`
-- forces HF actor/ref attention to `eager` on SOL to avoid the local `flash_attn` binary incompatibility already seen in the smaller debug path
+- derives actor / rollout / ref micro-batches from the normalized actor mini-batch instead of hardcoding the official script's `40`, so GPU-count or rollout-count changes do not silently repeat the prior divisibility failure
 - keeps the existing GDPO saturation event logging and optional rollout-dump audit hook
 
 ## What this script does not change
@@ -55,12 +75,35 @@ These values come from the official public Qwen2.5-3B GSM8K GRPO-LoRA script, no
 - no additional reward shaping
 - no removal of the existing verification workflow
 
+## Known Historical Failure Modes For This Path
+
+The GSM8K modern realistic path must be read together with [gsm8k_modern_error_catalog.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_error_catalog.md). The failure classes that have already mattered here are:
+
+- wrong env/interpreter or missing package
+- Slurm QoS and walltime mismatch
+- FlashAttention / `GLIBC_2.32` incompatibility on SOL
+- actor mini-batch normalization vs micro-batch divisibility
+- smoke/full memory-shape drift
+- worker-init memory pressure in the realistic 3B colocated topology
+- older SOL launcher regressions around project-root discovery and GPU-visibility normalization
+
+These are considered historical constraints on this path, not hypothetical edge cases.
+
+## Why This Config Differs From Prior Failed Attempts
+
+- It preserves the verified GSM8K dataset/reward stack from the debug wrapper instead of introducing new reward semantics.
+- It keeps the SOL-compatible eager-attention override that the smaller debug path already needed.
+- It computes the normalized actor mini-batch and derives default micro-batches from it, instead of copying the official public values unchanged.
+- Its smoke wrapper is intended to be a feasibility-smoke entrypoint, meaning it should preserve the realistic memory shape and only shorten duration and cadence.
+- It keeps rollout dumping opt-in so surprising runtime behavior can be checked with `artifact-audit` instead of interpreted from curves alone.
+
 ## Operational split
 
 Two Slurm entrypoints are provided:
 
 - [gdpo_gsm8k_modern_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_smoke.sbatch)
-  - short integration run with `5` training steps and `45` minutes walltime
+  - feasibility-smoke run with short duration limits
+  - should preserve the realistic memory shape unless it is explicitly relabeled as integration-only in the checklist
 
 - [gdpo_gsm8k_modern_realistic.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_realistic.sbatch)
   - full realistic run with `15` epochs and `1` day walltime

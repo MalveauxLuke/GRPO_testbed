@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
+# Config provenance:
+# - Entry type: feasibility-smoke entrypoint for the realistic GSM8K modern GDPO path.
+# - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_realistic.sh
+# - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_realistic.sh
+# - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_error_catalog.md
+# - Required manual gate before edits: /Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_config_creation_checklist.md
 # Submit with an optional account override:
 #   sbatch -A grp_<your_group> slurm/gdpo_gsm8k_modern_smoke.sbatch
 # Or:
 #   SOL_ACCOUNT=grp_<your_group> sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/gdpo_gsm8k_modern_smoke.sbatch
 # Optional rollout dump capture:
 #   GSM8K_MODERN_ROLLOUT_DATA_DIR=/scratch/$USER/verl-grpo/rollout_dumps/gsm8k_modern_smoke_$(date +%Y%m%d-%H%M%S) sbatch slurm/gdpo_gsm8k_modern_smoke.sbatch
-# This smoke wrapper exercises the realistic 3B/2-GPU training path with short integration limits.
+# This smoke wrapper is a feasibility-smoke for the realistic training path.
+# It should preserve the realistic memory shape and only shorten duration/cadence unless explicitly relabeled as integration-only in the checklist.
 # On SOL, the debug QoS is limited to 15 minutes, so this uses htc/public for a 45-minute smoke run.
 #SBATCH --job-name=verl-gdpo-gsm8k-modern-smoke
 #SBATCH --partition=htc

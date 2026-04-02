@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Config provenance:
+# - Entry type: full realistic GSM8K modern GDPO entrypoint.
+# - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_realistic.sh
+# - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_realistic.sh
+# - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_error_catalog.md
+# - Required manual gate before edits: /Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_config_creation_checklist.md
 # Submit with an optional account override:
 #   sbatch -A grp_<your_group> slurm/gdpo_gsm8k_modern_realistic.sbatch
 # Or:

@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Config provenance:
+# - Entry type: realistic GSM8K full-run wrapper reused by the feasibility-smoke and full-run sbatch entrypoints.
+# - Upstream anchors: external/verl/examples/grpo_trainer/run_qwen2_5-3b_gsm8k_grpo_lora.sh and external/verl/examples/gdpo_trainer/run_qwen1_5b_gdpo.sh
+# - Closest prior working local config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh
+# - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_error_catalog.md
+# - Required manual gate before edits: /Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_config_creation_checklist.md
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,6 +27,22 @@ PROJECT_NAME="${GSM8K_MODERN_PROJECT_NAME:-${SOL_PROJECT_NAME}_gdpo_gsm8k_modern
 MODEL_PATH="${GSM8K_MODERN_MODEL_PATH:-Qwen/Qwen2.5-3B-Instruct}"
 ROLLOUT_DATA_DIR="${GSM8K_MODERN_ROLLOUT_DATA_DIR:-}"
 VAL_BEFORE_TRAIN="${GSM8K_MODERN_VAL_BEFORE_TRAIN:-False}"
+N_GPUS_PER_NODE="${GSM8K_MODERN_N_GPUS_PER_NODE:-2}"
+NNODES="${GSM8K_MODERN_NNODES:-1}"
+TOTAL_GPUS=$((N_GPUS_PER_NODE * NNODES))
+ROLLOUT_N="${GSM8K_MODERN_ROLLOUT_N:-4}"
+PPO_MINI_BATCH_SIZE="${GSM8K_MODERN_PPO_MINI_BATCH_SIZE:-16}"
+
+(( TOTAL_GPUS > 0 )) || sol_fail "Expected total GPU count > 0, got ${TOTAL_GPUS}."
+(( (PPO_MINI_BATCH_SIZE * ROLLOUT_N) % TOTAL_GPUS == 0 )) || sol_fail \
+  "Invalid config: ppo_mini_batch_size (${PPO_MINI_BATCH_SIZE}) * rollout.n (${ROLLOUT_N}) must be divisible by total_gpus (${TOTAL_GPUS})."
+
+# Keep micro-batches aligned with the normalized actor mini-batch so GPU-count
+# changes do not silently repeat earlier divisibility failures.
+NORMALIZED_PPO_MINI_BATCH_SIZE=$((PPO_MINI_BATCH_SIZE * ROLLOUT_N / TOTAL_GPUS))
+ACTOR_PPO_MICRO_BATCH_SIZE="${GSM8K_MODERN_PPO_MICRO_BATCH_SIZE:-${NORMALIZED_PPO_MINI_BATCH_SIZE}}"
+ROLLOUT_LOGPROB_MICRO_BATCH_SIZE="${GSM8K_MODERN_ROLLOUT_LOGPROB_MICRO_BATCH_SIZE:-${NORMALIZED_PPO_MINI_BATCH_SIZE}}"
+REF_LOGPROB_MICRO_BATCH_SIZE="${GSM8K_MODERN_REF_LOGPROB_MICRO_BATCH_SIZE:-${NORMALIZED_PPO_MINI_BATCH_SIZE}}"
 
 sol_prepare_tracking_paths "${PROJECT_NAME}" "${EXPERIMENT_NAME}" "${RUN_TAG}"
 sol_prepare_gdpo_saturation_event_log_path
@@ -36,6 +58,8 @@ sol_msg "Checkpoint dir: ${LOCAL_CKPT_DIR}"
 sol_msg "TensorBoard dir: ${TENSORBOARD_DIR}"
 sol_msg "File logger path: ${VERL_FILE_LOGGER_PATH}"
 sol_msg "GDPO saturation event log: ${GDPO_SATURATION_EVENT_LOG_PATH}"
+sol_msg "Total GPUs: ${TOTAL_GPUS}"
+sol_msg "Normalized actor mini-batch after rollout/GPU split: ${NORMALIZED_PPO_MINI_BATCH_SIZE}"
 if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then
   mkdir -p "${ROLLOUT_DATA_DIR}"
   sol_msg "Rollout data dir: ${ROLLOUT_DATA_DIR}"
@@ -67,8 +91,8 @@ cmd=(
   "actor_rollout_ref.model.use_remove_padding=True"
   "actor_rollout_ref.model.enable_gradient_checkpointing=True"
   "actor_rollout_ref.actor.optim.lr=${GSM8K_MODERN_LR:-3e-6}"
-  "actor_rollout_ref.actor.ppo_mini_batch_size=${GSM8K_MODERN_PPO_MINI_BATCH_SIZE:-16}"
-  "actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=${GSM8K_MODERN_PPO_MICRO_BATCH_SIZE:-32}"
+  "actor_rollout_ref.actor.ppo_mini_batch_size=${PPO_MINI_BATCH_SIZE}"
+  "actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=${ACTOR_PPO_MICRO_BATCH_SIZE}"
   "actor_rollout_ref.actor.use_kl_loss=True"
   "actor_rollout_ref.actor.kl_loss_coef=${GSM8K_MODERN_ACTOR_KL_LOSS_COEF:-0.001}"
   "actor_rollout_ref.actor.kl_loss_type=low_var_kl"
@@ -77,14 +101,14 @@ cmd=(
   "actor_rollout_ref.actor.fsdp_config.optimizer_offload=False"
   "actor_rollout_ref.rollout.prompt_length=${GSM8K_MODERN_MAX_PROMPT_LENGTH:-512}"
   "actor_rollout_ref.rollout.response_length=${GSM8K_MODERN_MAX_RESPONSE_LENGTH:-1024}"
-  "actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=${GSM8K_MODERN_ROLLOUT_LOGPROB_MICRO_BATCH_SIZE:-32}"
+  "actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=${ROLLOUT_LOGPROB_MICRO_BATCH_SIZE}"
   "actor_rollout_ref.rollout.tensor_model_parallel_size=${GSM8K_MODERN_TP_SIZE:-2}"
   "actor_rollout_ref.rollout.name=vllm"
   "actor_rollout_ref.rollout.gpu_memory_utilization=${GSM8K_MODERN_GPU_MEMORY_UTILIZATION:-0.6}"
-  "actor_rollout_ref.rollout.n=${GSM8K_MODERN_ROLLOUT_N:-4}"
+  "actor_rollout_ref.rollout.n=${ROLLOUT_N}"
   "actor_rollout_ref.rollout.load_format=safetensors"
   "actor_rollout_ref.rollout.layered_summon=True"
-  "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${GSM8K_MODERN_REF_LOGPROB_MICRO_BATCH_SIZE:-32}"
+  "actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=${REF_LOGPROB_MICRO_BATCH_SIZE}"
   "actor_rollout_ref.ref.fsdp_config.param_offload=True"
   "+actor_rollout_ref.ref.model.override_config.attn_implementation=eager"
   "reward.custom_reward_function.path=${UPSTREAM_VERL_DIR}/verl/utils/reward_score/gsm8k_modern_two_reward.py"
@@ -94,8 +118,8 @@ cmd=(
   "trainer.logger=[\"console\",\"tensorboard\",\"file\"]"
   "trainer.project_name=${PROJECT_NAME}"
   "trainer.experiment_name=${EXPERIMENT_NAME}"
-  "trainer.n_gpus_per_node=${GSM8K_MODERN_N_GPUS_PER_NODE:-2}"
-  "trainer.nnodes=${GSM8K_MODERN_NNODES:-1}"
+  "trainer.n_gpus_per_node=${N_GPUS_PER_NODE}"
+  "trainer.nnodes=${NNODES}"
   "trainer.save_freq=${GSM8K_MODERN_SAVE_FREQ:-20}"
   "trainer.test_freq=${GSM8K_MODERN_TEST_FREQ:-5}"
   "trainer.total_epochs=${GSM8K_MODERN_TOTAL_EPOCHS:-15}"
