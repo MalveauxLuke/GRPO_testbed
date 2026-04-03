@@ -208,57 +208,128 @@ def build_equivalent_answer(gold_answer: str) -> str:
     return f"{stripped}.0"
 
 
+def build_hybrid_solution(
+    *,
+    reasoning: str,
+    hash_answer: str | None,
+    tag_answer: str | None,
+    trailing_text: str = "",
+) -> str:
+    parts = [f"<reasoning>{reasoning}</reasoning>"]
+    if hash_answer is not None:
+        parts.append(f"#### {hash_answer}")
+    if tag_answer is not None:
+        parts.append(f"<answer>{tag_answer}</answer>")
+    return "\n".join(parts) + trailing_text
+
+
 def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
     cases = [
         {
             "name": "valid_correct",
-            "solution": f"<reasoning>We solve the problem carefully.</reasoning><answer>{gold_answer}</answer>",
+            "solution": build_hybrid_solution(
+                reasoning="We solve the problem carefully.",
+                hash_answer=gold_answer,
+                tag_answer=gold_answer,
+            ),
             "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
         },
         {
             "name": "valid_wrong",
-            "solution": f"<reasoning>We solve the problem carefully.</reasoning><answer>{build_wrong_answer(gold_answer)}</answer>",
+            "solution": build_hybrid_solution(
+                reasoning="We solve the problem carefully.",
+                hash_answer=build_wrong_answer(gold_answer),
+                tag_answer=build_wrong_answer(gold_answer),
+            ),
             "expected": {"format_reward": 1.0, "correct_reward": 0.0, "score": 1.0},
         },
         {
-            "name": "missing_tags",
-            "solution": f"The answer is {gold_answer}.",
-            "expected": {"format_reward": 0.0, "correct_reward": 1.0, "score": 1.0},
+            "name": "missing_hash",
+            "solution": build_hybrid_solution(
+                reasoning="We solve the problem carefully.",
+                hash_answer=None,
+                tag_answer=gold_answer,
+            ),
+            "expected": {"format_reward": 1.0, "correct_reward": 0.0, "score": 1.0},
+        },
+        {
+            "name": "hash_only_no_tags",
+            "solution": build_hybrid_solution(
+                reasoning="We solve the problem carefully.",
+                hash_answer=gold_answer,
+                tag_answer=None,
+            ),
+            "expected": {"format_reward": 0.25, "correct_reward": 1.0, "score": 1.25},
         },
         {
             "name": "malformed_order",
-            "solution": f"<answer>{gold_answer}</answer><reasoning>Reasoning first is missing.</reasoning>",
+            "solution": f"<answer>{gold_answer}</answer>\n#### {gold_answer}\n<reasoning>Reasoning first is missing.</reasoning>",
             "expected": {"format_reward": 0.5, "correct_reward": 1.0, "score": 1.5},
         },
         {
             "name": "duplicated_tags",
-            "solution": f"<reasoning>One</reasoning><reasoning>Two</reasoning><answer>{gold_answer}</answer>",
+            "solution": f"<reasoning>One</reasoning><reasoning>Two</reasoning>\n#### {gold_answer}\n<answer>{gold_answer}</answer>",
             "expected": {"format_reward": 0.25, "correct_reward": 1.0, "score": 1.25},
         },
         {
             "name": "answer_outside_tags",
             "solution": f"<reasoning>We solve it.</reasoning>{gold_answer}",
-            "expected": {"format_reward": 0.25, "correct_reward": 1.0, "score": 1.25},
+            "expected": {"format_reward": 0.25, "correct_reward": 0.0, "score": 0.25},
         },
         {
             "name": "trailing_junk",
-            "solution": f"<reasoning>We solve it.</reasoning><answer>{gold_answer}</answer> trailing",
+            "solution": build_hybrid_solution(
+                reasoning="We solve it.",
+                hash_answer=gold_answer,
+                tag_answer=gold_answer,
+                trailing_text=" trailing",
+            ),
             "expected": {"format_reward": 0.5, "correct_reward": 1.0, "score": 1.5},
         },
         {
             "name": "whitespace_normalization",
-            "solution": f"<reasoning>We solve it.</reasoning><answer>  {gold_answer}  </answer>",
+            "solution": build_hybrid_solution(
+                reasoning="We solve it.",
+                hash_answer=f"  {gold_answer}  ",
+                tag_answer=f"  {gold_answer}  ",
+            ),
             "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
         },
         {
             "name": "dollar_normalization",
-            "solution": f"<reasoning>We solve it.</reasoning><answer>${gold_answer}</answer>",
+            "solution": build_hybrid_solution(
+                reasoning="We solve it.",
+                hash_answer=f"${gold_answer}",
+                tag_answer=f"${gold_answer}",
+            ),
             "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
         },
         {
             "name": "numeric_equivalence",
-            "solution": f"<reasoning>We solve it.</reasoning><answer>{build_equivalent_answer(gold_answer)}</answer>",
+            "solution": build_hybrid_solution(
+                reasoning="We solve it.",
+                hash_answer=build_equivalent_answer(gold_answer),
+                tag_answer=build_equivalent_answer(gold_answer),
+            ),
             "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
+        },
+        {
+            "name": "hash_tag_mismatch",
+            "solution": build_hybrid_solution(
+                reasoning="We solve it.",
+                hash_answer=gold_answer,
+                tag_answer=build_wrong_answer(gold_answer),
+            ),
+            "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
+        },
+        {
+            "name": "non_numeric_tag_with_correct_hash",
+            "solution": build_hybrid_solution(
+                reasoning="We compute it carefully.",
+                hash_answer=gold_answer,
+                tag_answer="final",
+            ),
+            "expected": {"format_reward": 0.5, "correct_reward": 1.0, "score": 1.5},
         },
     ]
 
@@ -491,9 +562,11 @@ def audit_reference_alignment(
             "no length reward",
             "<reasoning>",
             "<answer>",
+            "####",
             "structured",
             "approximate format",
             "numeric equivalence",
+            "hash",
         )
         missing_strings = [value for value in required_strings if value not in docs_text_lower]
         if missing_strings:
@@ -525,6 +598,8 @@ def audit_reference_alignment(
         "binary_numeric_equivalence_not_ratio_based_partial_credit",
         "format_reward_bakes_in_strict_plus_approximate_structure_signals",
         "correctness_not_format_gated",
+        "correctness_uses_hash_marker_only",
+        "no_response_wide_fallback_correctness",
         "no_length_reward",
     }
     if simplifications != required_simplifications:
@@ -537,7 +612,10 @@ def audit_reference_alignment(
             }
         )
     structured_output = reward_module.ALIGNMENT_SPEC.get("structured_output", {})
-    if not isinstance(structured_output, dict) or structured_output.get("schema") != "<reasoning>...</reasoning><answer>...</answer>":
+    if (
+        not isinstance(structured_output, dict)
+        or structured_output.get("schema") != "<reasoning>...</reasoning>\n#### ...\n<answer>...</answer>"
+    ):
         mismatches.append({"audit": "reference-audit", "mismatch_fields": ["structured_output.schema"]})
     rewards = reward_module.ALIGNMENT_SPEC.get("rewards", {})
     if not isinstance(rewards, dict) or set(rewards.keys()) != {"format_reward", "correct_reward"}:
@@ -547,6 +625,7 @@ def audit_reference_alignment(
         "length_reward",
         "ratio_based_partial_credit_correctness",
         "separate_third_numeric_extraction_reward",
+        "response_wide_correctness_fallback",
     }
     if excluded_features != forbidden_absences:
         mismatches.append(

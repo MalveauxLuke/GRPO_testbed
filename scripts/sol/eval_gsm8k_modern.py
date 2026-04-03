@@ -102,9 +102,11 @@ def main() -> None:
                         "score": float(reward_info["score"]),
                         "correct_reward": correct_reward,
                         "format_reward": format_reward,
-                        "answer_parse_ok": float(reward_info["answer_parse_ok"]),
-                        "parsed_answer": str(reward_info["parsed_answer"]),
-                        "expected_answer": str(reward_info["expected_answer"]),
+                        "hash_answer": str(reward_info["hash_answer"]),
+                        "tag_answer": str(reward_info["tag_answer"]),
+                        "hash_parse_ok": float(reward_info["hash_parse_ok"]),
+                        "tag_answer_parse_ok": float(reward_info["tag_answer_parse_ok"]),
+                        "hash_answer_equals_tag_answer": float(reward_info["hash_answer_equals_tag_answer"]),
                     }
                 )
                 sample_correctness.append(correct_reward)

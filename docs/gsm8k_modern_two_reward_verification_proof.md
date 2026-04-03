@@ -3,8 +3,9 @@
 Historical note: this document records the verification pass for the earlier
 strict-format / strict-correctness baseline. The reward contract was later
 updated on 2026-04-03 to use blended exact-plus-approximate format credit and
-independent numeric correctness, so this proof should be treated as historical
-context until the verifier is rerun against the updated reward module.
+hybrid `####`-only numeric correctness, so this proof should be treated as
+historical context until the verifier is rerun against the updated reward
+module.
 
 This note records what was verified for the modern 2-reward GSM8K baseline, which commands were run, and what those commands prove.
 

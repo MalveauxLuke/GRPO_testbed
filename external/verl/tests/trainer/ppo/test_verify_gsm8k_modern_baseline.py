@@ -151,9 +151,9 @@ def test_reference_audit_passes_with_matching_alignment_and_docs(tmp_path, monke
         (
             "Two rewards.\n"
             "No length reward.\n"
-            "Structured format with <reasoning> and <answer> tags.\n"
+            "Structured format with <reasoning>, ####, and <answer>.\n"
             "Approximate format credit is blended into format_reward.\n"
-            "Correctness uses numeric equivalence independent of strict format parsing.\n"
+            "Correctness uses a hash marker and numeric equivalence independent of strict format parsing.\n"
         ),
         encoding="utf-8",
     )

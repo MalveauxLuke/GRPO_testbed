@@ -5,7 +5,7 @@ modern GSM8K saturation baseline.
 
 ## Goal
 
-Run a normal-looking GSM8K reasoning setup for `Qwen/Qwen2.5-0.5B-Instruct`
+Run a normal-looking GSM8K reasoning setup for the `Qwen/Qwen2.5-Instruct`
 that uses modern structured outputs and exactly two public reward keys:
 
 - `correct_reward`
@@ -28,7 +28,9 @@ The baseline is for saturation measurement, not reward-design novelty.
 The model is instructed to answer using:
 
 ```text
-<reasoning> ... </reasoning><answer> ... </answer>
+<reasoning> ... </reasoning>
+#### final_numeric_answer
+<answer> final_numeric_answer </answer>
 ```
 
 This is intentionally modern and structured, but simpler than archived
@@ -45,18 +47,21 @@ A bounded blend of two public precedents:
 
 Concretely:
 
-- exact format still requires one clean `<reasoning>...</reasoning><answer>...</answer>` response
+- exact format still requires one clean `<reasoning>...</reasoning><answer>...</answer>` tag structure
+- the `<answer>` field must be numeric-looking for full strict format credit
 - approximate format gives partial credit when the expected tags appear even if the overall structure is imperfect
+- the `####` marker is intentionally ignored by `format_reward` so format and correctness stay separate
 - the two are blended back into a single `format_reward` so the GDPO contract stays two-dimensional
 
 ### `correct_reward`
 
-Binary independent numeric correctness:
+Binary `####`-only numeric correctness:
 
-- first try to extract a number from the `<answer>...</answer>` section
-- if that fails, fall back to extracting the last numeric candidate from the response
+- extract the predicted answer from the final `#### ...` marker only
 - compare numerically against the GSM8K gold answer parsed from the original `#### number`
 - treat numeric equivalents like `72` and `72.0` as correct
+- support decimals, negatives, commas, `$`, fractions, and scientific notation
+- do not recover correctness from reasoning text or malformed `<answer>` fields
 
 ## Intentional Simplifications
 
@@ -64,6 +69,8 @@ Binary independent numeric correctness:
 - Binary numeric equivalence, not ratio-based partial credit
 - One public `format_reward`, even though it internally blends strict and approximate format signals
 - Correctness is not format-gated
+- Correctness uses `####` only
+- No response-wide correctness fallback
 - No length reward
 - No separate third numeric-extraction reward
 
@@ -74,6 +81,7 @@ Not part of this baseline:
 - `numeric_extractability` as a separate reward key
 - ratio-based partial-credit correctness
 - length-aware rewards
+- response-wide correctness fallback
 - efficiency-focused reward shaping
 
 Those are valid follow-up experiments, but they would no longer represent the

@@ -52,7 +52,7 @@ def test_build_prompt_uses_system_and_user_messages():
 def test_compute_score_accepts_valid_correct_structured_answer():
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
-        solution_str="<reasoning>Add the numbers.</reasoning><answer>4</answer>",
+        solution_str="<reasoning>Add the numbers.</reasoning>\n#### 4\n<answer>4</answer>",
         ground_truth="4",
         extra_info={},
     )
@@ -60,15 +60,17 @@ def test_compute_score_accepts_valid_correct_structured_answer():
     assert result["format_reward"] == 1.0
     assert result["correct_reward"] == 1.0
     assert result["score"] == 2.0
-    assert result["answer_parse_ok"] == 1.0
-    assert result["parsed_answer"] == "4"
-    assert result["expected_answer"] == "4"
+    assert result["hash_parse_ok"] == 1.0
+    assert result["tag_answer_parse_ok"] == 1.0
+    assert result["hash_answer"] == "4"
+    assert result["tag_answer"] == "4"
+    assert result["hash_answer_equals_tag_answer"] == 1.0
 
 
 def test_compute_score_gives_partial_format_credit_for_trailing_junk():
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
-        solution_str="<reasoning>Add the numbers.</reasoning><answer>4</answer> trailing text",
+        solution_str="<reasoning>Add the numbers.</reasoning>\n#### 4\n<answer>4</answer> trailing text",
         ground_truth="4",
         extra_info={},
     )
@@ -76,14 +78,16 @@ def test_compute_score_gives_partial_format_credit_for_trailing_junk():
     assert result["format_reward"] == 0.5
     assert result["correct_reward"] == 1.0
     assert result["score"] == 1.5
-    assert result["answer_parse_ok"] == 1.0
-    assert result["parsed_answer"] == "4"
+    assert result["hash_parse_ok"] == 1.0
+    assert result["tag_answer_parse_ok"] == 1.0
+    assert result["hash_answer"] == "4"
+    assert result["tag_answer"] == "4"
 
 
 def test_compute_score_normalizes_whitespace_commas_and_currency():
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
-        solution_str="<reasoning>Compute it.</reasoning><answer> $1,234 </answer>",
+        solution_str="<reasoning>Compute it.</reasoning>\n#### $1,234\n<answer> $1,234 </answer>",
         ground_truth="1234",
         extra_info={},
     )
@@ -91,29 +95,46 @@ def test_compute_score_normalizes_whitespace_commas_and_currency():
     assert result["format_reward"] == 1.0
     assert result["correct_reward"] == 1.0
     assert result["score"] == 2.0
-    assert result["parsed_answer"] == "1234"
+    assert result["hash_answer"] == "1234"
+    assert result["tag_answer"] == "1234"
 
 
-def test_compute_score_keeps_correctness_independent_when_tags_are_missing():
+def test_compute_score_requires_hash_for_correctness_even_when_tags_are_well_formed():
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
-        solution_str="The answer is 4.",
+        solution_str="<reasoning>Compute it.</reasoning><answer>4</answer>",
         ground_truth="4",
         extra_info={},
     )
 
-    assert result["format_reward"] == 0.0
-    assert result["correct_reward"] == 1.0
+    assert result["format_reward"] == 1.0
+    assert result["correct_reward"] == 0.0
     assert result["score"] == 1.0
-    assert result["answer_parse_ok"] == 1.0
-    assert result["parsed_answer"] == "4"
-    assert result["answer_extraction_mode"] == "response_fallback"
+    assert result["hash_parse_ok"] == 0.0
+    assert result["tag_answer_parse_ok"] == 1.0
+    assert result["tag_answer"] == "4"
+
+
+def test_compute_score_keeps_correctness_when_only_hash_is_present():
+    result = reward_module.compute_score(
+        data_source=reward_module.DATA_SOURCE,
+        solution_str="<reasoning>Compute it.</reasoning>\n#### 4",
+        ground_truth="4",
+        extra_info={},
+    )
+
+    assert result["format_reward"] == 0.25
+    assert result["correct_reward"] == 1.0
+    assert result["score"] == 1.25
+    assert result["hash_parse_ok"] == 1.0
+    assert result["tag_answer_parse_ok"] == 0.0
+    assert result["hash_answer"] == "4"
 
 
 def test_compute_score_gives_partial_format_credit_for_malformed_tag_order():
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
-        solution_str="<answer>4</answer><reasoning>Compute it.</reasoning>",
+        solution_str="<answer>4</answer>\n#### 4\n<reasoning>Compute it.</reasoning>",
         ground_truth="4",
         extra_info={},
     )
@@ -121,15 +142,16 @@ def test_compute_score_gives_partial_format_credit_for_malformed_tag_order():
     assert result["format_reward"] == 0.5
     assert result["correct_reward"] == 1.0
     assert result["score"] == 1.5
-    assert result["answer_parse_ok"] == 1.0
-    assert result["parsed_answer"] == "4"
-    assert result["answer_extraction_mode"] == "answer_section"
+    assert result["hash_parse_ok"] == 1.0
+    assert result["tag_answer_parse_ok"] == 1.0
+    assert result["hash_answer"] == "4"
+    assert result["tag_answer"] == "4"
 
 
 def test_compute_score_treats_numeric_equivalence_as_correct_for_integer_answers():
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
-        solution_str="<reasoning>Compute it.</reasoning><answer>72.0</answer>",
+        solution_str="<reasoning>Compute it.</reasoning>\n#### 72.0\n<answer>72.0</answer>",
         ground_truth="72",
         extra_info={},
     )
@@ -137,13 +159,14 @@ def test_compute_score_treats_numeric_equivalence_as_correct_for_integer_answers
     assert result["format_reward"] == 1.0
     assert result["correct_reward"] == 1.0
     assert result["score"] == 2.0
-    assert result["parsed_answer"] == "72.0"
+    assert result["hash_answer"] == "72.0"
+    assert result["tag_answer"] == "72.0"
 
 
 def test_compute_score_treats_numeric_equivalence_as_correct_for_decimal_answers():
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
-        solution_str="<reasoning>Compute it.</reasoning><answer>0.50</answer>",
+        solution_str="<reasoning>Compute it.</reasoning>\n#### 0.50\n<answer>0.50</answer>",
         ground_truth="0.5",
         extra_info={},
     )
@@ -151,11 +174,61 @@ def test_compute_score_treats_numeric_equivalence_as_correct_for_decimal_answers
     assert result["format_reward"] == 1.0
     assert result["correct_reward"] == 1.0
     assert result["score"] == 2.0
-    assert result["parsed_answer"] == "0.50"
+    assert result["hash_answer"] == "0.50"
+    assert result["tag_answer"] == "0.50"
+
+
+def test_compute_score_supports_fraction_and_scientific_notation_in_hash_answer():
+    fraction_result = reward_module.compute_score(
+        data_source=reward_module.DATA_SOURCE,
+        solution_str="<reasoning>Compute it.</reasoning>\n#### 1/2\n<answer>1/2</answer>",
+        ground_truth="0.5",
+        extra_info={},
+    )
+    scientific_result = reward_module.compute_score(
+        data_source=reward_module.DATA_SOURCE,
+        solution_str="<reasoning>Compute it.</reasoning>\n#### 7.2e1\n<answer>7.2e1</answer>",
+        ground_truth="72",
+        extra_info={},
+    )
+
+    assert fraction_result["correct_reward"] == 1.0
+    assert fraction_result["format_reward"] == 1.0
+    assert scientific_result["correct_reward"] == 1.0
+    assert scientific_result["format_reward"] == 1.0
+
+
+def test_compute_score_logs_hash_tag_mismatch_without_zeroing_format():
+    result = reward_module.compute_score(
+        data_source=reward_module.DATA_SOURCE,
+        solution_str="<reasoning>Compute it.</reasoning>\n#### 4\n<answer>5</answer>",
+        ground_truth="4",
+        extra_info={},
+    )
+
+    assert result["format_reward"] == 1.0
+    assert result["correct_reward"] == 1.0
+    assert result["hash_answer"] == "4"
+    assert result["tag_answer"] == "5"
+    assert result["hash_answer_equals_tag_answer"] == 0.0
+
+
+def test_compute_score_rejects_non_numeric_tag_without_using_reasoning_fallback():
+    result = reward_module.compute_score(
+        data_source=reward_module.DATA_SOURCE,
+        solution_str="<reasoning>We compute 4 in the work.</reasoning>\n#### 4\n<answer>final</answer>",
+        ground_truth="4",
+        extra_info={},
+    )
+
+    assert result["format_reward"] == 0.5
+    assert result["correct_reward"] == 1.0
+    assert result["hash_parse_ok"] == 1.0
+    assert result["tag_answer_parse_ok"] == 0.0
 
 
 def test_compute_score_strips_assistant_wrapper_tokens():
-    wrapped_output = "<|im_start|>assistant\n<reasoning>Compute it.</reasoning><answer>4</answer><|im_end|>"
+    wrapped_output = "<|im_start|>assistant\n<reasoning>Compute it.</reasoning>\n#### 4\n<answer>4</answer><|im_end|>"
     result = reward_module.compute_score(
         data_source=reward_module.DATA_SOURCE,
         solution_str=wrapped_output,
