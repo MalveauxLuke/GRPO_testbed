@@ -1,5 +1,11 @@
 # GSM8K Modern Two-Reward Verification Proof
 
+Historical note: this document records the verification pass for the earlier
+strict-format / strict-correctness baseline. The reward contract was later
+updated on 2026-04-03 to use blended exact-plus-approximate format credit and
+independent numeric correctness, so this proof should be treated as historical
+context until the verifier is rerun against the updated reward module.
+
 This note records what was verified for the modern 2-reward GSM8K baseline, which commands were run, and what those commands prove.
 
 ## Scope
@@ -11,7 +17,7 @@ The baseline under verification is the structured GSM8K setup implemented in:
 - [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh)
 - [verify_gsm8k_modern_baseline.py](/Users/god/Documents/VERL_GRPO/scripts/sol/verify_gsm8k_modern_baseline.py)
 
-Its reward definition is:
+Its historical reward definition was:
 
 - `format_reward`: strict `<reasoning>...</reasoning><answer>...</answer>` compliance
 - `correct_reward`: exact normalized numeric match against the GSM8K final answer

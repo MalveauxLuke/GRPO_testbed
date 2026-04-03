@@ -135,7 +135,8 @@ This parser does all of the following:
    - [normalize_numeric_text](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L103)
 5. requires the normalized answer to be non-empty
 
-If parsing fails, both rewards end up as zero.
+Strict parsing only controls the exact-format sub-signal. Correctness can still
+be earned through independent numeric extraction when strict parsing fails.
 
 ### `format_reward`
 
@@ -143,10 +144,10 @@ If parsing fails, both rewards end up as zero.
 
 - [compute_format_reward](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L142)
 
-It is binary:
+It is a bounded blend of:
 
-- `1.0` if the response passes `parse_structured_response`
-- `0.0` otherwise
+- exact structured-output compliance
+- approximate tag-level format credit
 
 So `format_reward = 1` means all of the following were true:
 
@@ -156,7 +157,10 @@ So `format_reward = 1` means all of the following were true:
 - there was no trailing junk
 - there were no duplicated or nested tags
 
-It does **not** mean the numeric answer was correct. It only means the structured output schema was obeyed.
+Values between `0` and `1` mean the response had some of the expected tags but
+did not satisfy the full exact structure. It does **not** mean the numeric
+answer was correct. It only means the structured output schema was obeyed fully
+or partially.
 
 ### `correct_reward`
 
@@ -164,16 +168,20 @@ It does **not** mean the numeric answer was correct. It only means the structure
 
 - [compute_correct_reward](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L148)
 
-It is also binary:
+It is binary:
 
-- `1.0` if:
-  - the response parses successfully
-  - the normalized `<answer>` content exactly equals the normalized gold answer
+- `1.0` if an answer can be extracted numerically and that numeric value is
+  equivalent to the gold GSM8K answer
 - `0.0` otherwise
 
 The gold answer comes from the original GSM8K `answer` field by extracting the final `#### number` at:
 
 - [extract_hash_answer](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L96)
+
+Extraction is intentionally forgiving:
+
+- prefer the `<answer>...</answer>` section when present
+- otherwise fall back to the last numeric candidate in the response
 
 Normalization is intentionally light:
 
@@ -191,6 +199,10 @@ This means examples like these are treated as equivalent:
 - `1234`
 - `1,234`
 - ` $1,234 `
+- `72`
+- `72.0`
+- `0.5`
+- `0.50`
 
 ### `score`
 
@@ -204,13 +216,12 @@ It is simply:
 score = format_reward + correct_reward
 ```
 
-So the possible values are:
+Representative values are:
 
-- `0.0`: bad format and not correct
-- `1.0`: either correct-format-but-wrong-answer, or theoretically unreachable wrong-format-but-correct-answer under this parser
-- `2.0`: valid format and correct answer
-
-In practice, because `correct_reward` depends on successful parsing, correctness implies a valid answer block.
+- `0.0`: no useful format signal and no correct numeric answer
+- `1.0`: either valid-format-but-wrong-answer, or wrong-format-but-correct-answer with no format credit
+- `1.25` / `1.5`: wrong-format-but-correct-answer with partial format credit
+- `2.0`: valid exact format and correct answer
 
 ### Extra diagnostic fields
 
@@ -220,7 +231,7 @@ In practice, because `correct_reward` depends on successful parsing, correctness
 - `parsed_answer`
 - `expected_answer`
 
-These are included in [compute_score](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L161) and are useful for audits and debugging, even though the training objective only uses `score`, `correct_reward`, and `format_reward`.
+These are included in [compute_score](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L217) and are useful for audits and debugging, even though the training objective only uses `score`, `correct_reward`, and `format_reward`.
 
 ## Training Configuration Hooks
 
@@ -239,9 +250,8 @@ So the intended GDPO multi-reward setup is explicitly:
 This baseline intentionally does **not** include:
 
 - length reward
-- numeric extractability as a separate third reward
-- soft format reward
-- approximate or partial-credit correctness
+- numeric extractability as a separate third reward key
+- ratio-based partial-credit correctness
 
 Those exclusions are declared in the alignment spec in:
 
@@ -253,8 +263,8 @@ This baseline is:
 
 - official GSM8K answers and questions underneath
 - repackaged into a modern structured chat prompt
-- rewarded with exactly two binary channels:
-  - strict structured format
-  - exact normalized numeric correctness
+- rewarded with exactly two public channels:
+  - a blended strict-plus-approximate `format_reward`
+  - an independent binary numeric `correct_reward`
 
 That makes it a clean, minimal modern multi-reward GSM8K setup for saturation measurement.

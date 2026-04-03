@@ -201,6 +201,13 @@ def build_wrong_answer(gold_answer: str) -> str:
         return "999999"
 
 
+def build_equivalent_answer(gold_answer: str) -> str:
+    stripped = str(gold_answer).strip()
+    if "." in stripped:
+        return f"{stripped}0"
+    return f"{stripped}.0"
+
+
 def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
     cases = [
         {
@@ -216,27 +223,27 @@ def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
         {
             "name": "missing_tags",
             "solution": f"The answer is {gold_answer}.",
-            "expected": {"format_reward": 0.0, "correct_reward": 0.0, "score": 0.0},
+            "expected": {"format_reward": 0.0, "correct_reward": 1.0, "score": 1.0},
         },
         {
             "name": "malformed_order",
             "solution": f"<answer>{gold_answer}</answer><reasoning>Reasoning first is missing.</reasoning>",
-            "expected": {"format_reward": 0.0, "correct_reward": 0.0, "score": 0.0},
+            "expected": {"format_reward": 0.5, "correct_reward": 1.0, "score": 1.5},
         },
         {
             "name": "duplicated_tags",
             "solution": f"<reasoning>One</reasoning><reasoning>Two</reasoning><answer>{gold_answer}</answer>",
-            "expected": {"format_reward": 0.0, "correct_reward": 0.0, "score": 0.0},
+            "expected": {"format_reward": 0.25, "correct_reward": 1.0, "score": 1.25},
         },
         {
             "name": "answer_outside_tags",
             "solution": f"<reasoning>We solve it.</reasoning>{gold_answer}",
-            "expected": {"format_reward": 0.0, "correct_reward": 0.0, "score": 0.0},
+            "expected": {"format_reward": 0.25, "correct_reward": 1.0, "score": 1.25},
         },
         {
             "name": "trailing_junk",
             "solution": f"<reasoning>We solve it.</reasoning><answer>{gold_answer}</answer> trailing",
-            "expected": {"format_reward": 0.0, "correct_reward": 0.0, "score": 0.0},
+            "expected": {"format_reward": 0.5, "correct_reward": 1.0, "score": 1.5},
         },
         {
             "name": "whitespace_normalization",
@@ -246,6 +253,11 @@ def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
         {
             "name": "dollar_normalization",
             "solution": f"<reasoning>We solve it.</reasoning><answer>${gold_answer}</answer>",
+            "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
+        },
+        {
+            "name": "numeric_equivalence",
+            "solution": f"<reasoning>We solve it.</reasoning><answer>{build_equivalent_answer(gold_answer)}</answer>",
             "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
         },
     ]
@@ -480,6 +492,8 @@ def audit_reference_alignment(
             "<reasoning>",
             "<answer>",
             "structured",
+            "approximate format",
+            "numeric equivalence",
         )
         missing_strings = [value for value in required_strings if value not in docs_text_lower]
         if missing_strings:
@@ -508,8 +522,9 @@ def audit_reference_alignment(
     simplifications = set(reward_module.ALIGNMENT_SPEC.get("simplifications", []))
     required_simplifications = {
         "two_rewards_not_three_or_four",
-        "binary_exact_correctness_not_approximate_matching",
-        "single_strict_format_reward_not_strict_plus_soft",
+        "binary_numeric_equivalence_not_ratio_based_partial_credit",
+        "format_reward_bakes_in_strict_plus_approximate_structure_signals",
+        "correctness_not_format_gated",
         "no_length_reward",
     }
     if simplifications != required_simplifications:
@@ -528,7 +543,11 @@ def audit_reference_alignment(
     if not isinstance(rewards, dict) or set(rewards.keys()) != {"format_reward", "correct_reward"}:
         mismatches.append({"audit": "reference-audit", "mismatch_fields": ["rewards.keys"]})
     excluded_features = set(reward_module.ALIGNMENT_SPEC.get("excluded_features", []))
-    forbidden_absences = {"numeric_extractability_reward", "soft_format_reward", "length_reward", "partial_credit_correctness"}
+    forbidden_absences = {
+        "length_reward",
+        "ratio_based_partial_credit_correctness",
+        "separate_third_numeric_extraction_reward",
+    }
     if excluded_features != forbidden_absences:
         mismatches.append(
             {

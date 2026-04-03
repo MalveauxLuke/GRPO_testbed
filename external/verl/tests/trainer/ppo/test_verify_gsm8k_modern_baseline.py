@@ -113,6 +113,7 @@ def test_reward_audit_passes_full_synthetic_battery():
     assert summary["samples_checked"] == 1
     assert summary["mismatch_count"] == 0
     assert summary["case_counts"]["valid_correct"] == 1
+    assert summary["case_counts"]["numeric_equivalence"] == 1
     assert mismatches == []
 
 
@@ -151,6 +152,8 @@ def test_reference_audit_passes_with_matching_alignment_and_docs(tmp_path, monke
             "Two rewards.\n"
             "No length reward.\n"
             "Structured format with <reasoning> and <answer> tags.\n"
+            "Approximate format credit is blended into format_reward.\n"
+            "Correctness uses numeric equivalence independent of strict format parsing.\n"
         ),
         encoding="utf-8",
     )
