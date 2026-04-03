@@ -2,7 +2,7 @@
 # Config provenance:
 # - Semantic baseline: hybrid-hash GSM8K two-reward GDPO (`correct_reward + format_reward`).
 # - Runtime profile: sol_fit_2gpu.
-# - Entry type: 15-minute feasibility preflight for the hybrid `####` + tags fit-contract path.
+# - Entry type: short multi-step feasibility preflight for the hybrid `####` + tags fit-contract path.
 # - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_debug.sh
 # - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_debug.sh
 # - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md
@@ -45,7 +45,7 @@ JOB_LOG="${LOG_ROOT}/slurm-${SLURM_JOB_NAME}-${SLURM_JOB_ID}.log"
 exec > >(tee -a "${JOB_LOG}") 2>&1
 
 sol_msg "Scratch log: ${JOB_LOG}"
-sol_msg "Submitting 15-minute hybrid-hash GSM8K fit debug preflight from ${PROJECT_ROOT}."
+sol_msg "Submitting short multi-step hybrid-hash GSM8K fit debug preflight from ${PROJECT_ROOT}."
 sol_msg "This entrypoint keeps the proven SOL-safe rollout knobs explicit to avoid the HF-path, tokenizer-init, and vLLM cache regressions we already hit."
 
 export GSM8K_MODERN_N_GPUS_PER_NODE="${GSM8K_MODERN_N_GPUS_PER_NODE:-2}"
@@ -64,9 +64,9 @@ export GSM8K_MODERN_ACTOR_PARAM_OFFLOAD="${GSM8K_MODERN_ACTOR_PARAM_OFFLOAD:-Tru
 export GSM8K_MODERN_ACTOR_OPTIMIZER_OFFLOAD="${GSM8K_MODERN_ACTOR_OPTIMIZER_OFFLOAD:-True}"
 export GSM8K_MODERN_REF_PARAM_OFFLOAD="${GSM8K_MODERN_REF_PARAM_OFFLOAD:-True}"
 export GSM8K_MODERN_VAL_MAX_SAMPLES="${GSM8K_MODERN_VAL_MAX_SAMPLES:-64}"
-export GSM8K_MODERN_TOTAL_TRAINING_STEPS="${GSM8K_MODERN_TOTAL_TRAINING_STEPS:-1}"
+export GSM8K_MODERN_TOTAL_TRAINING_STEPS="${GSM8K_MODERN_TOTAL_TRAINING_STEPS:-3}"
 export GSM8K_MODERN_TOTAL_EPOCHS="${GSM8K_MODERN_TOTAL_EPOCHS:-1}"
-export GSM8K_MODERN_SAVE_FREQ="${GSM8K_MODERN_SAVE_FREQ:-1}"
+export GSM8K_MODERN_SAVE_FREQ="${GSM8K_MODERN_SAVE_FREQ:-3}"
 export GSM8K_MODERN_TEST_FREQ="${GSM8K_MODERN_TEST_FREQ:-1}"
 export GSM8K_MODERN_VAL_BEFORE_TRAIN="${GSM8K_MODERN_VAL_BEFORE_TRAIN:-False}"
 export GSM8K_MODERN_RUN_CLASSIFICATION="${GSM8K_MODERN_RUN_CLASSIFICATION:-feasibility-smoke}"
