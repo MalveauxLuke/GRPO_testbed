@@ -73,6 +73,8 @@ For the longer second-stage GSM8K preflight and official pre-full-run gate:
 
 This is the 40-minute `integration-smoke` gate before the main run at [gdpo_gsm8k_modern_fit_2gpu.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu.sbatch). It intentionally bakes in the proven SOL-safe compatibility shape for the current Qwen2.5-3B fit path: `use_shm=False`, `gpu_memory_utilization=0.35`, `max_num_seqs=64`, `skip_tokenizer_init=True`, and `val_max_samples=64`.
 
+If the goal is saturation measurement rather than a long full run, use the capped 75-step check at [gdpo_gsm8k_modern_fit_2gpu_saturation_check.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu_saturation_check.sbatch). It keeps the same proven SOL-safe compatibility shape, sets `test_freq=10`, `save_freq=25`, `val_max_samples=64`, and requests 6 hours of walltime.
+
 Reference-public GSM8K path:
 
 - [run_gdpo_gsm8k_modern_realistic.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_realistic.sh)
