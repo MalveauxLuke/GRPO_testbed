@@ -43,7 +43,7 @@ Each processed row is created in [prepare_gsm8k_modern.sh](/Users/god/Documents/
     "source_dataset": "openai/gsm8k",
     "source_subset": "main",
     "baseline_name": "gsm8k_modern_two_reward",
-    "alignment_spec_version": "2026-04-03-hybrid-hash"
+    "alignment_spec_version": "2026-04-03-hybrid-hash-strict-format"
   }
 }
 ```
@@ -129,8 +129,8 @@ This parser does all of the following:
    - [_strip_assistant_wrapper](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L111)
 2. requires the response to match:
    - one `<reasoning>...</reasoning>` block
-   - optionally followed by one `#### ...` line
-   - followed by one `<answer>...</answer>` block
+   - followed by one parseable numeric `#### ...` line
+   - followed by one parseable numeric `<answer>...</answer>` block
    - no extra text before or after the structured response
 3. rejects responses where nested or duplicated `<reasoning>` / `<answer>` tags appear inside the parsed blocks:
    - [gsm8k_modern_two_reward.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L129)
@@ -139,7 +139,7 @@ This parser does all of the following:
    - comma removal
    - dollar-sign removal
    - [normalize_numeric_text](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L103)
-5. requires the normalized `<answer>` text to be numerically parseable
+5. requires both the normalized `####` text and the normalized `<answer>` text to be numerically parseable
 
 Strict parsing only controls the exact-format sub-signal. Correctness is scored
 separately from the final `#### ...` marker.
@@ -157,12 +157,14 @@ It is a bounded blend of:
 
 So `format_reward = 1` means all of the following were true:
 
-- the response used the exact `<reasoning>...</reasoning><answer>...</answer>` structure
+- the response used the exact `<reasoning>...</reasoning>`, `#### ...`, `<answer>...</answer>` structure
+- the hash line was present and numerically parseable
 - the answer block was present
 - the answer block was numeric-looking
 - there was no trailing junk
 - there were no duplicated or nested tags
-- `format_reward` does not depend on whether the `####` marker is present or numerically correct
+- missing `####` therefore prevents full strict-format credit, even if the tags are otherwise perfect
+- the approximate sub-signal still only looks at tag presence, so missing `####` can still earn partial format credit
 
 Values between `0` and `1` mean the response had some of the expected tags but
 did not satisfy the full exact structure. It does **not** mean the numeric
@@ -229,6 +231,7 @@ score = format_reward + correct_reward
 Representative values are:
 
 - `0.0`: no useful format signal and no correct numeric answer
+- `0.5`: correct-looking tags but missing `####`, or another tag-only partial-format case with no correctness
 - `1.0`: either valid-format-but-wrong-answer, or wrong-format-but-correct-answer with no format credit
 - `1.25` / `1.5`: wrong-format-but-correct-answer with partial format credit
 - `2.0`: valid exact format and correct answer
@@ -276,7 +279,7 @@ This baseline is:
 - official GSM8K answers and questions underneath
 - repackaged into a modern structured chat prompt
 - rewarded with exactly two public channels:
-  - a blended strict-plus-approximate `format_reward`
+  - a blended strict-plus-approximate `format_reward` whose strict sub-signal requires `####`
   - an independent binary numeric `correct_reward`
 
 That makes it a clean, minimal modern multi-reward GSM8K setup for saturation measurement.

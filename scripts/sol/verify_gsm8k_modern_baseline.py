@@ -250,7 +250,16 @@ def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
                 hash_answer=None,
                 tag_answer=gold_answer,
             ),
-            "expected": {"format_reward": 1.0, "correct_reward": 0.0, "score": 1.0},
+            "expected": {"format_reward": 0.5, "correct_reward": 0.0, "score": 0.5},
+        },
+        {
+            "name": "non_numeric_hash",
+            "solution": build_hybrid_solution(
+                reasoning="We solve the problem carefully.",
+                hash_answer="final",
+                tag_answer=gold_answer,
+            ),
+            "expected": {"format_reward": 0.5, "correct_reward": 0.0, "score": 0.5},
         },
         {
             "name": "hash_only_no_tags",
@@ -337,7 +346,11 @@ def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
         cases.append(
             {
                 "name": "comma_normalization",
-                "solution": f"<reasoning>We solve it.</reasoning><answer>{int(gold_answer):,}</answer>",
+                "solution": build_hybrid_solution(
+                    reasoning="We solve it.",
+                    hash_answer=f"{int(gold_answer):,}",
+                    tag_answer=f"{int(gold_answer):,}",
+                ),
                 "expected": {"format_reward": 1.0, "correct_reward": 1.0, "score": 2.0},
             }
         )

@@ -47,10 +47,11 @@ A bounded blend of two public precedents:
 
 Concretely:
 
-- exact format still requires one clean `<reasoning>...</reasoning><answer>...</answer>` tag structure
+- exact format requires one clean `<reasoning>...</reasoning>`, one parseable numeric `#### ...` line, and one parseable numeric `<answer>...</answer>` block in the right order
 - the `<answer>` field must be numeric-looking for full strict format credit
 - approximate format gives partial credit when the expected tags appear even if the overall structure is imperfect
-- the `####` marker is intentionally ignored by `format_reward` so format and correctness stay separate
+- missing `####` therefore drops the response from full format credit down to partial tag-only credit
+- approximate format still ignores `####` and only scores the tag-level scaffold
 - the two are blended back into a single `format_reward` so the GDPO contract stays two-dimensional
 
 ### `correct_reward`

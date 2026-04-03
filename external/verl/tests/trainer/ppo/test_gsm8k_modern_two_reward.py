@@ -107,9 +107,9 @@ def test_compute_score_requires_hash_for_correctness_even_when_tags_are_well_for
         extra_info={},
     )
 
-    assert result["format_reward"] == 1.0
+    assert result["format_reward"] == 0.5
     assert result["correct_reward"] == 0.0
-    assert result["score"] == 1.0
+    assert result["score"] == 0.5
     assert result["hash_parse_ok"] == 0.0
     assert result["tag_answer_parse_ok"] == 1.0
     assert result["tag_answer"] == "4"
@@ -225,6 +225,21 @@ def test_compute_score_rejects_non_numeric_tag_without_using_reasoning_fallback(
     assert result["correct_reward"] == 1.0
     assert result["hash_parse_ok"] == 1.0
     assert result["tag_answer_parse_ok"] == 0.0
+
+
+def test_compute_score_rejects_non_numeric_hash_for_strict_format_and_correctness():
+    result = reward_module.compute_score(
+        data_source=reward_module.DATA_SOURCE,
+        solution_str="<reasoning>We compute it.</reasoning>\n#### final\n<answer>4</answer>",
+        ground_truth="4",
+        extra_info={},
+    )
+
+    assert result["format_reward"] == 0.5
+    assert result["correct_reward"] == 0.0
+    assert result["score"] == 0.5
+    assert result["hash_parse_ok"] == 0.0
+    assert result["tag_answer_parse_ok"] == 1.0
 
 
 def test_compute_score_strips_assistant_wrapper_tokens():

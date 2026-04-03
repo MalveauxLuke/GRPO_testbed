@@ -45,7 +45,7 @@ SYSTEM_PROMPT = (
 
 ALIGNMENT_SPEC = {
     "baseline_name": "gsm8k_modern_two_reward",
-    "version": "2026-04-03-hybrid-hash",
+    "version": "2026-04-03-hybrid-hash-strict-format",
     "dataset_source": {
         "name": "openai/gsm8k",
         "subset": "main",
@@ -78,7 +78,7 @@ ALIGNMENT_SPEC = {
 
 _HASH_ANSWER_PATTERN = re.compile(r"####\s*(?P<answer>[^\n<]+)")
 _STRUCTURED_RESPONSE_PATTERN = re.compile(
-    r"^\s*<reasoning>(?P<reasoning>.*?)</reasoning>\s*(?:####\s*(?P<hash>[^\n<]+)\s*)?<answer>(?P<answer>.*?)</answer>\s*$",
+    r"^\s*<reasoning>(?P<reasoning>.*?)</reasoning>\s*####\s*(?P<hash>[^\n<]+)\s*<answer>(?P<answer>.*?)</answer>\s*$",
     re.DOTALL,
 )
 _ANSWER_SECTION_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
@@ -193,10 +193,13 @@ def parse_structured_response(solution_str: str) -> tuple[int, str]:
         return 0, ""
 
     reasoning_text = match.group("reasoning")
+    hash_text = normalize_numeric_text(match.group("hash"))
     answer_text_raw = match.group("answer")
     if any(tag in reasoning_text for tag in _FORBIDDEN_INNER_TAGS):
         return 0, ""
     if any(tag in answer_text_raw for tag in _FORBIDDEN_INNER_TAGS):
+        return 0, ""
+    if _parse_numeric_value(hash_text) is None:
         return 0, ""
 
     answer_text = normalize_numeric_text(answer_text_raw)
