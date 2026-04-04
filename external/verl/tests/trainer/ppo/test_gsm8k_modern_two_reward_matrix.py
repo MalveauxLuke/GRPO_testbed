@@ -145,10 +145,10 @@ CASES = [
         ground_truth="72",
         solution="<answer>72</answer>",
         expected_format_reward=0.25,
-        expected_correct_reward=0.0,
-        expected_answer_parse_ok=0.0,
-        expected_parsed_answer="",
-        concern="missing reasoning keeps correctness off",
+        expected_correct_reward=1.0,
+        expected_answer_parse_ok=1.0,
+        expected_parsed_answer="72",
+        concern="missing reasoning should not suppress clean answer-tag correctness",
     ),
     Case(
         name="plain_text_number_without_tags",
@@ -165,30 +165,30 @@ CASES = [
         ground_truth="72",
         solution="<answer>72</answer>\n<reasoning>We solve it.</reasoning>",
         expected_format_reward=0.5,
-        expected_correct_reward=0.0,
-        expected_answer_parse_ok=0.0,
-        expected_parsed_answer="",
-        concern="partial format but correctness gated by strict parse",
+        expected_correct_reward=1.0,
+        expected_answer_parse_ok=1.0,
+        expected_parsed_answer="72",
+        concern="partial format but clean answer tag still counts for correctness",
     ),
     Case(
         name="trailing_junk_partial_format",
         ground_truth="72",
         solution="<reasoning>We solve it.</reasoning>\n<answer>72</answer> trailing text",
         expected_format_reward=0.5,
-        expected_correct_reward=0.0,
-        expected_answer_parse_ok=0.0,
-        expected_parsed_answer="",
-        concern="partial format but correctness gated by strict parse",
+        expected_correct_reward=1.0,
+        expected_answer_parse_ok=1.0,
+        expected_parsed_answer="72",
+        concern="partial format but clean answer tag still counts for correctness",
     ),
     Case(
         name="duplicated_reasoning_tags",
         ground_truth="72",
         solution="<reasoning>One</reasoning><reasoning>Two</reasoning>\n<answer>72</answer>",
         expected_format_reward=0.25,
-        expected_correct_reward=0.0,
-        expected_answer_parse_ok=0.0,
-        expected_parsed_answer="",
-        concern="duplicated tags reduce approximate score",
+        expected_correct_reward=1.0,
+        expected_answer_parse_ok=1.0,
+        expected_parsed_answer="72",
+        concern="duplicated reasoning tags reduce format but not answer-tag correctness",
     ),
     Case(
         name="answer_outside_tags",
@@ -239,6 +239,16 @@ CASES = [
         expected_answer_parse_ok=0.0,
         expected_parsed_answer="",
         concern="nested tags are invalid",
+    ),
+    Case(
+        name="duplicate_answer_tags",
+        ground_truth="72",
+        solution="<reasoning>We solve it.</reasoning>\n<answer>72</answer>\n<answer>72</answer>",
+        expected_format_reward=0.25,
+        expected_correct_reward=0.0,
+        expected_answer_parse_ok=0.0,
+        expected_parsed_answer="",
+        concern="duplicate answer tags invalidate answer-only correctness",
     ),
     Case(
         name="assistant_wrapper_tokens",
@@ -305,6 +315,11 @@ def run_matrix() -> dict[str, object]:
         "correct_reward_positive_cases": sum(int(row["correct_reward"] == 1.0) for row in rows),
         "unexpected_correct_without_parse": [
             row["name"] for row in rows if row["correct_reward"] == 1.0 and row["answer_parse_ok"] == 0.0
+        ],
+        "partial_format_but_answer_parse_ok": [
+            row["name"]
+            for row in rows
+            if row["strict_format_reward"] == 0.0 and row["answer_parse_ok"] == 1.0
         ],
         "answer_parse_failures": [row["name"] for row in rows if row["answer_parse_ok"] == 0.0],
         "full_format_without_parse_cases": [

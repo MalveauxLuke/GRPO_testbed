@@ -56,21 +56,22 @@ Concretely:
 
 ### `correct_reward`
 
-Binary coupled numeric correctness:
+Binary answer-tag numeric correctness:
 
-- parse the predicted answer only from the exact structured `<answer>...</answer>` span
-- if strict structured parsing fails, correctness is `0`
+- strip assistant wrappers first
+- require exactly one clean numeric `<answer>...</answer>` span
+- do not require the `<reasoning>` block to be well formed for correctness
 - compare numerically against the GSM8K gold answer parsed from the original source `#### number`
 - treat numeric equivalents like `72` and `72.0` as correct
 - support decimals, negatives, commas, `$`, fractions, and scientific notation
-- do not recover correctness from reasoning text, malformed `<answer>` fields, or plain-text fallbacks
+- reject duplicate `<answer>` tags, nested tags inside `<answer>`, malformed numeric answers, reasoning-text rescue, and plain-text fallbacks
 
 ## Intentional Simplifications
 
 - Two rewards, not three or four
 - Binary numeric equivalence, not ratio-based partial credit
 - One public `format_reward`, even though it internally blends strict and approximate format signals
-- Correctness is coupled to the structured answer parse
+- Correctness uses a single clean answer tag, not the full strict structured parse
 - No response-wide correctness fallback
 - No length reward
 - No separate third numeric-extraction reward

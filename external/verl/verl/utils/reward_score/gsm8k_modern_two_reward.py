@@ -16,7 +16,7 @@
 
 This module intentionally implements a minimal modern GSM8K multi-reward setup:
 - format_reward: bounded strict+approximate structured-output compliance
-- correct_reward: structured-answer-only normalized numeric answer correctness
+- correct_reward: single-answer-tag normalized numeric answer correctness
 
 It is reference-derived, not a novel reward design:
 - data origin and gold-answer extraction follow official GSM8K / upstream verl
@@ -44,7 +44,7 @@ SYSTEM_PROMPT = (
 
 ALIGNMENT_SPEC = {
     "baseline_name": "gsm8k_modern_two_reward",
-    "version": "2026-04-03-coupled-soft-format",
+    "version": "2026-04-04-answer-tag-correctness",
     "dataset_source": {
         "name": "openai/gsm8k",
         "subset": "main",
@@ -56,13 +56,13 @@ ALIGNMENT_SPEC = {
     },
     "rewards": {
         "format_reward": "bounded_blend_of_strict_and_approximate_structured_output_compliance",
-        "correct_reward": "structured_answer_only_numeric_equivalence_against_gsm8k_final_answer",
+        "correct_reward": "single_clean_answer_tag_numeric_equivalence_against_gsm8k_final_answer",
     },
     "simplifications": [
         "two_rewards_not_three_or_four",
         "binary_numeric_equivalence_not_ratio_based_partial_credit",
         "format_reward_bakes_in_strict_plus_approximate_structure_signals",
-        "correctness_coupled_to_structured_answer_parse",
+        "correctness_uses_single_clean_answer_tag_not_full_structured_parse",
         "no_response_wide_fallback_correctness",
         "no_length_reward",
     ],
@@ -80,6 +80,7 @@ _STRUCTURED_RESPONSE_PATTERN = re.compile(
     r"^\s*<reasoning>(?P<reasoning>.*?)</reasoning>\s*<answer>(?P<answer>.*?)</answer>\s*$",
     re.DOTALL,
 )
+_ANSWER_TAG_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
 _ASSISTANT_WRAPPER_PATTERNS = (
     re.compile(r"<\|im_start\|>assistant\s*", re.IGNORECASE),
     re.compile(r"<\|start_header_id\|>assistant<\|end_header_id\|>\s*", re.IGNORECASE),
@@ -181,6 +182,25 @@ def parse_structured_response(solution_str: str) -> tuple[int, str]:
     return 1, answer_text
 
 
+def parse_answer_tag_only(solution_str: str) -> tuple[int, str]:
+    response = _strip_assistant_wrapper(solution_str)
+    if response.count("<answer>") != 1 or response.count("</answer>") != 1:
+        return 0, ""
+
+    match = _ANSWER_TAG_PATTERN.search(response)
+    if match is None:
+        return 0, ""
+
+    answer_text_raw = match.group("answer")
+    if any(tag in answer_text_raw for tag in _FORBIDDEN_INNER_TAGS):
+        return 0, ""
+
+    answer_text = normalize_numeric_text(answer_text_raw)
+    if _parse_numeric_value(answer_text) is None:
+        return 0, ""
+    return 1, answer_text
+
+
 def match_format_exactly(solution_str: str) -> float:
     strict_format_reward, _ = parse_structured_response(solution_str)
     return float(strict_format_reward)
@@ -220,7 +240,7 @@ def compute_format_reward(solution_str: str, ground_truth: str, extra_info: dict
 
 def compute_correct_reward(solution_str: str, ground_truth: str, extra_info: dict[str, Any] | None = None) -> float:
     del extra_info
-    _, predicted_answer = parse_structured_response(solution_str)
+    _, predicted_answer = parse_answer_tag_only(solution_str)
     expected_answer = normalize_numeric_text(ground_truth)
     return 1.0 if predicted_answer != "" and _is_numeric_equivalent(predicted_answer, expected_answer) else 0.0
 
@@ -234,7 +254,7 @@ def compute_score(data_source, solution_str, ground_truth, extra_info, **kwargs)
         (_FORMAT_REWARD_STRICT_WEIGHT * strict_format_reward)
         + (_FORMAT_REWARD_APPROX_WEIGHT * approx_format_reward)
     )
-    _, parsed_answer = parse_structured_response(solution_str)
+    _, parsed_answer = parse_answer_tag_only(solution_str)
     expected_answer = normalize_numeric_text(ground_truth)
     correct_reward = 1.0 if parsed_answer != "" and _is_numeric_equivalent(parsed_answer, expected_answer) else 0.0
     result = {

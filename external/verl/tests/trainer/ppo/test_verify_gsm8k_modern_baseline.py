@@ -154,7 +154,7 @@ def test_reference_audit_passes_with_matching_alignment_and_docs(tmp_path, monke
             "No length reward.\n"
             "Structured format with <reasoning> and <answer>.\n"
             "Approximate format credit is blended into format_reward.\n"
-            "Correctness is coupled to the structured answer parse and uses numeric equivalence.\n"
+            "Correctness uses a single clean answer tag and numeric equivalence.\n"
             "Source GSM8K gold answers still come from the source #### answer.\n"
         ),
         encoding="utf-8",

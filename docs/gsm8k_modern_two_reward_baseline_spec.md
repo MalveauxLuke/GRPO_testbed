@@ -47,7 +47,7 @@ Each processed row has this shape:
     "source_dataset": "openai/gsm8k",
     "source_subset": "main",
     "baseline_name": "gsm8k_modern_two_reward",
-    "alignment_spec_version": "2026-04-03-coupled-soft-format"
+    "alignment_spec_version": "2026-04-04-answer-tag-correctness"
   }
 }
 ```
@@ -83,7 +83,7 @@ So the active contract is:
 - generated outputs use repo-native `<reasoning>/<answer>` tags only
 - source GSM8K gold answers still come from the original source `#### number`
 
-This is the coupled tags-only baseline used for trainability.
+This is the answer-tag correctness baseline used for trainability.
 
 ## Reward Criteria
 
@@ -103,7 +103,8 @@ The strict parser:
 - rejects nested `<reasoning>` / `<answer>` tags inside the parsed blocks
 - requires the `<answer>` contents to be numerically parseable
 
-If strict parsing fails, `parsed_answer` is empty and `correct_reward` is `0`.
+Strict parsing is used only for `strict_format_reward`. Correctness uses a
+separate answer-tag-only parse.
 
 ### `format_reward`
 
@@ -141,11 +142,15 @@ correct.
 
 ### `correct_reward`
 
-`correct_reward` is binary and coupled to the structured answer parse:
+`correct_reward` is binary and uses a single clean answer tag:
 
-- parse the predicted answer only from the strict `<answer>...</answer>` span
-- if strict parsing fails, correctness is `0`
+- strip assistant wrappers first
+- require exactly one `<answer>` open tag and one `</answer>` close tag
+- extract only the content inside that one answer span
+- reject duplicate or nested answer/reasoning tags inside the answer span
+- require the extracted answer to be numerically parseable
 - compare that parsed numeric answer against the GSM8K gold answer
+- do not require the reasoning block to be valid for correctness
 
 Numeric equivalence is intentionally forgiving for formatting, while remaining
 binary:
@@ -174,7 +179,11 @@ Representative totals:
 - `0.25`
   - partial tag scaffold only
 - `0.5`
-  - good tag scaffold but failed strict parse, so zero correctness
+  - good tag scaffold but failed strict parse and no clean answer-tag correctness
+- `1.25`
+  - partial format but one clean correct `<answer>` tag
+- `1.5`
+  - all four tags appear once, strict format failed, but the clean `<answer>` tag is correct
 - `1.0`
   - valid format but wrong answer
 - `2.0`
@@ -211,7 +220,7 @@ This baseline is:
 - repackaged into a tags-only structured chat prompt
 - rewarded with exactly two public channels:
   - a soft blended `format_reward`
-  - a coupled binary `correct_reward` derived from the same strict `<answer>` parse
+- a binary `correct_reward` derived from a single clean `<answer>` parse
 
 That makes it a trainable, minimal modern two-reward GSM8K baseline for the
 next saturation check.

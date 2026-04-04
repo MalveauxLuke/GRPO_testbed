@@ -187,12 +187,16 @@ def _behavior_bucket(output_text: str, recomputed: dict[str, Any]) -> str:
         return "strict_correct"
     if strict_format == 1.0 and correct_reward == 0.0:
         return "strict_wrong_answer"
+    if strict_format == 0.0 and answer_parse_ok == 1.0 and correct_reward == 1.0:
+        return "answer_tag_correct_without_strict_format"
+    if strict_format == 0.0 and answer_parse_ok == 1.0 and correct_reward == 0.0:
+        return "answer_tag_wrong_without_strict_format"
     if has_reasoning_tag and not has_answer_tag:
         return "reasoning_only"
-    if has_answer_tag and not has_reasoning_tag:
-        return "answer_only"
     if format_reward > 0.0 and answer_parse_ok == 0.0:
-        return "partial_format_parse_failed"
+        return "partial_format_answer_parse_failed"
+    if has_answer_tag and not has_reasoning_tag:
+        return "answer_only_parse_failed"
     if not has_reasoning_tag and not has_answer_tag:
         return "no_tags"
     return "other"

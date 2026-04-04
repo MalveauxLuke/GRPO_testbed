@@ -254,7 +254,7 @@ def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
                 reasoning=None,
                 answer=gold_answer,
             ),
-            "expected": {"format_reward": 0.25, "correct_reward": 0.0, "score": 0.25},
+            "expected": {"format_reward": 0.25, "correct_reward": 1.0, "score": 1.25},
         },
         {
             "name": "plain_text_without_tags",
@@ -264,12 +264,12 @@ def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
         {
             "name": "malformed_order",
             "solution": f"<answer>{gold_answer}</answer>\n<reasoning>Reasoning first is missing.</reasoning>",
-            "expected": {"format_reward": 0.5, "correct_reward": 0.0, "score": 0.5},
+            "expected": {"format_reward": 0.5, "correct_reward": 1.0, "score": 1.5},
         },
         {
             "name": "duplicated_tags",
             "solution": f"<reasoning>One</reasoning><reasoning>Two</reasoning>\n<answer>{gold_answer}</answer>",
-            "expected": {"format_reward": 0.25, "correct_reward": 0.0, "score": 0.25},
+            "expected": {"format_reward": 0.25, "correct_reward": 1.0, "score": 1.25},
         },
         {
             "name": "answer_outside_tags",
@@ -283,7 +283,16 @@ def build_reward_test_cases(gold_answer: str) -> list[dict[str, Any]]:
                 answer=gold_answer,
                 trailing_text=" trailing",
             ),
-            "expected": {"format_reward": 0.5, "correct_reward": 0.0, "score": 0.5},
+            "expected": {"format_reward": 0.5, "correct_reward": 1.0, "score": 1.5},
+        },
+        {
+            "name": "duplicate_answer_tags",
+            "solution": (
+                "<reasoning>We solve it.</reasoning>\n"
+                f"<answer>{gold_answer}</answer>\n"
+                f"<answer>{gold_answer}</answer>"
+            ),
+            "expected": {"format_reward": 0.25, "correct_reward": 0.0, "score": 0.25},
         },
         {
             "name": "whitespace_normalization",
@@ -562,7 +571,7 @@ def audit_reference_alignment(
             "structured",
             "approximate format",
             "numeric equivalence",
-            "coupled",
+            "answer tag",
             "source",
             "####",
         )
@@ -595,7 +604,7 @@ def audit_reference_alignment(
         "two_rewards_not_three_or_four",
         "binary_numeric_equivalence_not_ratio_based_partial_credit",
         "format_reward_bakes_in_strict_plus_approximate_structure_signals",
-        "correctness_coupled_to_structured_answer_parse",
+        "correctness_uses_single_clean_answer_tag_not_full_structured_parse",
         "no_response_wide_fallback_correctness",
         "no_length_reward",
     }
