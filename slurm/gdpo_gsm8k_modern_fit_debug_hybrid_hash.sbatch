@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Config provenance:
-# - Semantic baseline: hybrid-hash GSM8K two-reward GDPO (`correct_reward + format_reward`).
+# - Semantic baseline: tags-only GSM8K two-reward GDPO with answer-tag correctness (`correct_reward + format_reward`).
 # - Runtime profile: sol_fit_2gpu.
-# - Entry type: short multi-step feasibility preflight for the hybrid `####` + tags fit-contract path.
+# - Entry type: short multi-step feasibility preflight for the Qwen2.5-1.5B-Instruct answer-tag fit-contract path.
 # - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_debug.sh
 # - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_debug.sh
 # - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md
@@ -12,10 +12,8 @@
 # Or:
 #   SOL_ACCOUNT=grp_<your_group> sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/gdpo_gsm8k_modern_fit_debug_hybrid_hash.sbatch
 # Optional rollout dump capture:
-#   GSM8K_MODERN_ROLLOUT_DATA_DIR=/scratch/$USER/verl-grpo/rollout_dumps/gsm8k_modern_fit_debug_hybrid_hash_$(date +%Y%m%d-%H%M%S) sbatch slurm/gdpo_gsm8k_modern_fit_debug_hybrid_hash.sbatch
-# Expected data refresh before first run after reward changes:
-#   scripts/sol/prepare_gsm8k_modern.sh
-#SBATCH --job-name=verl-gdpo-gsm8k-modern-fit-debug-hybrid-hash
+#   GSM8K_MODERN_ROLLOUT_DATA_DIR=/scratch/$USER/verl-grpo/rollout_dumps/gsm8k_modern_fit_debug_answer_tag_1_5b_instruct_$(date +%Y%m%d-%H%M%S) sbatch slurm/gdpo_gsm8k_modern_fit_debug_hybrid_hash.sbatch
+#SBATCH --job-name=verl-gdpo-gsm8k-modern-fit-debug-answer-tag-1p5b-instruct
 #SBATCH --partition=htc
 #SBATCH --qos=debug
 #SBATCH --nodes=1
@@ -45,7 +43,7 @@ JOB_LOG="${LOG_ROOT}/slurm-${SLURM_JOB_NAME}-${SLURM_JOB_ID}.log"
 exec > >(tee -a "${JOB_LOG}") 2>&1
 
 sol_msg "Scratch log: ${JOB_LOG}"
-sol_msg "Submitting short multi-step hybrid-hash GSM8K fit debug preflight from ${PROJECT_ROOT}."
+sol_msg "Submitting short multi-step Qwen2.5-1.5B-Instruct GSM8K fit debug preflight from ${PROJECT_ROOT}."
 sol_msg "This entrypoint keeps the proven SOL-safe rollout knobs explicit to avoid the HF-path, tokenizer-init, and vLLM cache regressions we already hit."
 
 export GSM8K_MODERN_N_GPUS_PER_NODE="${GSM8K_MODERN_N_GPUS_PER_NODE:-2}"
@@ -71,7 +69,7 @@ export GSM8K_MODERN_TEST_FREQ="${GSM8K_MODERN_TEST_FREQ:-1}"
 export GSM8K_MODERN_VAL_BEFORE_TRAIN="${GSM8K_MODERN_VAL_BEFORE_TRAIN:-False}"
 export GSM8K_MODERN_RUN_CLASSIFICATION="${GSM8K_MODERN_RUN_CLASSIFICATION:-feasibility-smoke}"
 export GSM8K_MODERN_RUNTIME_PROFILE="${GSM8K_MODERN_RUNTIME_PROFILE:-sol_fit_2gpu}"
-export GSM8K_MODERN_EXPERIMENT_NAME="${GSM8K_MODERN_EXPERIMENT_NAME:-qwen2_5_3b_gdpo_gsm8k_modern_fit_debug_hybrid_hash_v20260403}"
-export GSM8K_MODERN_PROJECT_NAME="${GSM8K_MODERN_PROJECT_NAME:-${SOL_PROJECT_NAME}_gdpo_gsm8k_modern_fit_debug_hybrid_hash}"
+export GSM8K_MODERN_EXPERIMENT_NAME="${GSM8K_MODERN_EXPERIMENT_NAME:-qwen2_5_1_5b_instruct_gdpo_gsm8k_modern_fit_debug_answer_tag_v20260404}"
+export GSM8K_MODERN_PROJECT_NAME="${GSM8K_MODERN_PROJECT_NAME:-${SOL_PROJECT_NAME}_gdpo_gsm8k_modern_fit_debug_answer_tag_1_5b_instruct}"
 
 "${PROJECT_ROOT}/scripts/sol/run_gdpo_gsm8k_modern_fit_debug.sh" "$@"

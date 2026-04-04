@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Config provenance:
-# - Semantic baseline: hybrid-hash GSM8K two-reward GDPO (`correct_reward + format_reward`).
+# - Semantic baseline: tags-only GSM8K two-reward GDPO with answer-tag correctness (`correct_reward + format_reward`).
 # - Runtime profile: sol_fit_2gpu.
-# - Entry type: capped 75-step integration-smoke run for checking GDPO saturation under the hybrid `####` + tags reward contract.
+# - Entry type: capped 75-step integration-smoke run for checking GDPO saturation with Qwen2.5-1.5B-Instruct under the answer-tag reward contract.
 # - Upstream anchor inherited through: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh
 # - Local parent config: /Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh
 # - Historical failure reference: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_error_catalog.md
@@ -12,10 +12,8 @@
 # Or:
 #   SOL_ACCOUNT=grp_<your_group> sbatch ${SOL_ACCOUNT:+-A "$SOL_ACCOUNT"} slurm/gdpo_gsm8k_modern_fit_2gpu_hybrid_hash_saturation_check.sbatch
 # Optional rollout dump capture:
-#   GSM8K_MODERN_ROLLOUT_DATA_DIR=/scratch/$USER/verl-grpo/rollout_dumps/gsm8k_modern_fit_2gpu_hybrid_hash_saturation_check_$(date +%Y%m%d-%H%M%S) sbatch slurm/gdpo_gsm8k_modern_fit_2gpu_hybrid_hash_saturation_check.sbatch
-# Expected data refresh before first run after reward changes:
-#   scripts/sol/prepare_gsm8k_modern.sh
-#SBATCH --job-name=verl-gdpo-gsm8k-modern-fit-2gpu-hybrid-hash-saturation-check
+#   GSM8K_MODERN_ROLLOUT_DATA_DIR=/scratch/$USER/verl-grpo/rollout_dumps/gsm8k_modern_fit_2gpu_answer_tag_1_5b_instruct_saturation_check_$(date +%Y%m%d-%H%M%S) sbatch slurm/gdpo_gsm8k_modern_fit_2gpu_hybrid_hash_saturation_check.sbatch
+#SBATCH --job-name=verl-gdpo-gsm8k-modern-fit-2gpu-answer-tag-1p5b-instruct-saturation-check
 #SBATCH --partition=public
 #SBATCH --qos=public
 #SBATCH --nodes=1
@@ -45,7 +43,7 @@ JOB_LOG="${LOG_ROOT}/slurm-${SLURM_JOB_NAME}-${SLURM_JOB_ID}.log"
 exec > >(tee -a "${JOB_LOG}") 2>&1
 
 sol_msg "Scratch log: ${JOB_LOG}"
-sol_msg "Submitting capped 75-step hybrid-hash GSM8K saturation-check run from ${PROJECT_ROOT}."
+sol_msg "Submitting capped 75-step Qwen2.5-1.5B-Instruct GSM8K saturation-check run from ${PROJECT_ROOT}."
 sol_msg "This entrypoint keeps the proven SOL-safe rollout knobs explicit to avoid the HF-path, tokenizer-init, and vLLM cache regressions we already hit."
 
 export GSM8K_MODERN_N_GPUS_PER_NODE="${GSM8K_MODERN_N_GPUS_PER_NODE:-2}"
@@ -71,7 +69,7 @@ export GSM8K_MODERN_SAVE_FREQ="${GSM8K_MODERN_SAVE_FREQ:-25}"
 export GSM8K_MODERN_VAL_BEFORE_TRAIN="${GSM8K_MODERN_VAL_BEFORE_TRAIN:-False}"
 export GSM8K_MODERN_RUN_CLASSIFICATION="${GSM8K_MODERN_RUN_CLASSIFICATION:-integration-smoke}"
 export GSM8K_MODERN_RUNTIME_PROFILE="${GSM8K_MODERN_RUNTIME_PROFILE:-sol_fit_2gpu}"
-export GSM8K_MODERN_EXPERIMENT_NAME="${GSM8K_MODERN_EXPERIMENT_NAME:-qwen2_5_3b_gdpo_gsm8k_modern_fit_2gpu_hybrid_hash_saturation_check_v20260403}"
-export GSM8K_MODERN_PROJECT_NAME="${GSM8K_MODERN_PROJECT_NAME:-${SOL_PROJECT_NAME}_gdpo_gsm8k_modern_hybrid_hash_saturation_check}"
+export GSM8K_MODERN_EXPERIMENT_NAME="${GSM8K_MODERN_EXPERIMENT_NAME:-qwen2_5_1_5b_instruct_gdpo_gsm8k_modern_fit_2gpu_answer_tag_saturation_check_v20260404}"
+export GSM8K_MODERN_PROJECT_NAME="${GSM8K_MODERN_PROJECT_NAME:-${SOL_PROJECT_NAME}_gdpo_gsm8k_modern_answer_tag_1_5b_instruct_saturation_check}"
 
 "${PROJECT_ROOT}/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh" "$@"
