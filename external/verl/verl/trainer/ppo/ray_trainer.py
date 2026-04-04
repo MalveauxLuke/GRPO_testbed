@@ -140,9 +140,42 @@ def _compute_gdpo_saturation_metrics(gdpo_saturation_info: dict) -> dict[str, fl
     return metrics
 
 
-def _append_gdpo_saturation_events(log_path: str | None, step: int, events: list[dict], actor_grad_norm: float | None) -> None:
+def _compute_gdpo_advantage_diagnostic_metrics(gdpo_advantage_diagnostics: dict) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    per_reward = gdpo_advantage_diagnostics.get("per_reward", {})
+    for reward_name, summary in per_reward.items():
+        prefix = f"gdpo_advantage/pre_whiten/{reward_name}"
+        metrics[f"{prefix}/mean"] = float(summary.get("mean", 0.0))
+        metrics[f"{prefix}/abs_mean"] = float(summary.get("abs_mean", 0.0))
+        metrics[f"{prefix}/std"] = float(summary.get("std", 0.0))
+        metrics[f"{prefix}/min"] = float(summary.get("min", 0.0))
+        metrics[f"{prefix}/max"] = float(summary.get("max", 0.0))
+        metrics[f"{prefix}/zero_fraction"] = float(summary.get("zero_fraction", 0.0))
+
+    for total_name in ("pre_whiten_total", "post_whiten_total"):
+        summary = gdpo_advantage_diagnostics.get(total_name, {})
+        prefix = f"gdpo_advantage/{total_name}"
+        metrics[f"{prefix}/mean"] = float(summary.get("mean", 0.0))
+        metrics[f"{prefix}/abs_mean"] = float(summary.get("abs_mean", 0.0))
+        metrics[f"{prefix}/std"] = float(summary.get("std", 0.0))
+        metrics[f"{prefix}/min"] = float(summary.get("min", 0.0))
+        metrics[f"{prefix}/max"] = float(summary.get("max", 0.0))
+        metrics[f"{prefix}/zero_fraction"] = float(summary.get("zero_fraction", 0.0))
+    return metrics
+
+
+def _append_gdpo_saturation_events(
+    log_path: str | None,
+    step: int,
+    events: list[dict],
+    actor_grad_norm: float | None,
+    advantage_events: list[dict] | None = None,
+) -> None:
     if not log_path or not events:
         return
+
+    advantage_events = advantage_events or []
+    advantage_by_key = {(event["reward_name"], event["group_id"]): event for event in advantage_events}
 
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
     with open(log_path, "a", encoding="utf-8") as fp:
@@ -159,6 +192,25 @@ def _append_gdpo_saturation_events(log_path: str | None, step: int, events: list
                 "is_all_one": event["is_all_one"],
                 "actor_grad_norm": actor_grad_norm,
             }
+            advantage_event = advantage_by_key.get((event["reward_name"], event["group_id"]))
+            if advantage_event is not None:
+                record.update(
+                    {
+                        "valid_token_count": advantage_event["valid_token_count"],
+                        "response_length_mean": advantage_event["response_length_mean"],
+                        "pre_whiten_component_mean": advantage_event["pre_whiten_component_mean"],
+                        "pre_whiten_component_abs_mean": advantage_event["pre_whiten_component_abs_mean"],
+                        "pre_whiten_component_std": advantage_event["pre_whiten_component_std"],
+                        "pre_whiten_component_min": advantage_event["pre_whiten_component_min"],
+                        "pre_whiten_component_max": advantage_event["pre_whiten_component_max"],
+                        "pre_whiten_total_mean": advantage_event["pre_whiten_total_mean"],
+                        "pre_whiten_total_abs_mean": advantage_event["pre_whiten_total_abs_mean"],
+                        "pre_whiten_total_std": advantage_event["pre_whiten_total_std"],
+                        "post_whiten_total_mean": advantage_event["post_whiten_total_mean"],
+                        "post_whiten_total_abs_mean": advantage_event["post_whiten_total_abs_mean"],
+                        "post_whiten_total_std": advantage_event["post_whiten_total_std"],
+                    }
+                )
             fp.write(json.dumps(record, sort_keys=True) + "\n")
 
 
@@ -1626,6 +1678,9 @@ class RayPPOTrainer:
                     gdpo_saturation_info = batch.meta_info.get("gdpo_saturation")
                     if gdpo_saturation_info:
                         metrics.update(_compute_gdpo_saturation_metrics(gdpo_saturation_info))
+                    gdpo_advantage_diagnostics = batch.meta_info.get("gdpo_advantage_diagnostics")
+                    if gdpo_advantage_diagnostics:
+                        metrics.update(_compute_gdpo_advantage_diagnostic_metrics(gdpo_advantage_diagnostics))
                 metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
                 # TODO: implement actual tflpo and theoretical tflpo
                 n_gpus = self.resource_pool_manager.get_n_gpus()
@@ -1635,12 +1690,16 @@ class RayPPOTrainer:
                 metrics.update(compute_variance_proxy_metrics(batch=batch, gradient_norm=gradient_norm))
                 if gdpo_reward_keys and self.config.algorithm.adv_estimator in ("gdpo", AdvantageEstimator.GDPO):
                     gdpo_saturation_info = batch.meta_info.get("gdpo_saturation")
+                    gdpo_advantage_diagnostics = batch.meta_info.get("gdpo_advantage_diagnostics")
                     if gdpo_saturation_info:
                         _append_gdpo_saturation_events(
                             log_path=os.environ.get("GDPO_SATURATION_EVENT_LOG_PATH"),
                             step=self.global_steps,
                             events=gdpo_saturation_info.get("events", []),
                             actor_grad_norm=float(gradient_norm) if gradient_norm is not None else None,
+                            advantage_events=(
+                                gdpo_advantage_diagnostics.get("events", []) if gdpo_advantage_diagnostics else None
+                            ),
                         )
                 # Note: mismatch metrics (KL, PPL, etc.) are collected at line 1179 after advantage computation
 

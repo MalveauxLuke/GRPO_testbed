@@ -217,6 +217,99 @@ def _compute_gdpo_saturation_diagnostics(
     return summary, events
 
 
+def _summarize_masked_advantage_tensor(
+    values: torch.Tensor,
+    response_mask: torch.Tensor,
+) -> dict[str, float]:
+    masked_values = torch.masked_select(values, response_mask.bool())
+    if masked_values.numel() == 0:
+        return {
+            "mean": 0.0,
+            "abs_mean": 0.0,
+            "std": 0.0,
+            "min": 0.0,
+            "max": 0.0,
+            "zero_fraction": 0.0,
+        }
+
+    std = masked_values.std() if masked_values.numel() > 1 else torch.tensor(0.0, device=masked_values.device)
+    return {
+        "mean": float(masked_values.mean().detach().item()),
+        "abs_mean": float(masked_values.abs().mean().detach().item()),
+        "std": float(std.detach().item()),
+        "min": float(masked_values.min().detach().item()),
+        "max": float(masked_values.max().detach().item()),
+        "zero_fraction": float((masked_values == 0).float().mean().detach().item()),
+    }
+
+
+def _build_gdpo_advantage_diagnostics(
+    per_reward_components: dict[str, torch.Tensor],
+    pre_whiten_total: torch.Tensor,
+    post_whiten_total: torch.Tensor,
+    response_mask: torch.Tensor,
+    saturation_events: list[dict[str, float | int | bool | str]],
+    index: np.ndarray,
+) -> dict[str, dict | list]:
+    diagnostics: dict[str, dict | list] = {
+        "per_reward": {},
+        "pre_whiten_total": _summarize_masked_advantage_tensor(pre_whiten_total, response_mask),
+        "post_whiten_total": _summarize_masked_advantage_tensor(post_whiten_total, response_mask),
+        "events": [],
+    }
+
+    for reward_name, component in per_reward_components.items():
+        diagnostics["per_reward"][reward_name] = _summarize_masked_advantage_tensor(component, response_mask)
+
+    group_ids = np.asarray(index).tolist()
+    response_lengths = response_mask.sum(dim=-1).detach().float()
+    event_rows: list[dict[str, float | int | str]] = []
+    for event in saturation_events:
+        reward_name = str(event["reward_name"])
+        event_group_id = str(event["group_id"])
+        sample_indices = [i for i, group_id in enumerate(group_ids) if str(group_id) == event_group_id]
+        if not sample_indices:
+            continue
+
+        group_component = per_reward_components[reward_name][sample_indices]
+        group_pre_whiten_total = pre_whiten_total[sample_indices]
+        group_post_whiten_total = post_whiten_total[sample_indices]
+        group_response_mask = response_mask[sample_indices]
+
+        component_stats = _summarize_masked_advantage_tensor(group_component, group_response_mask)
+        pre_total_stats = _summarize_masked_advantage_tensor(group_pre_whiten_total, group_response_mask)
+        post_total_stats = _summarize_masked_advantage_tensor(group_post_whiten_total, group_response_mask)
+
+        valid_token_count = int(group_response_mask.sum().detach().item())
+        response_length_mean = (
+            float(response_lengths[sample_indices].mean().detach().item()) if len(sample_indices) > 0 else 0.0
+        )
+
+        event_rows.append(
+            {
+                "reward_name": reward_name,
+                "group_id": event_group_id,
+                "group_size": int(event["group_size"]),
+                "valid_token_count": valid_token_count,
+                "response_length_mean": response_length_mean,
+                "pre_whiten_component_mean": component_stats["mean"],
+                "pre_whiten_component_abs_mean": component_stats["abs_mean"],
+                "pre_whiten_component_std": component_stats["std"],
+                "pre_whiten_component_min": component_stats["min"],
+                "pre_whiten_component_max": component_stats["max"],
+                "pre_whiten_total_mean": pre_total_stats["mean"],
+                "pre_whiten_total_abs_mean": pre_total_stats["abs_mean"],
+                "pre_whiten_total_std": pre_total_stats["std"],
+                "post_whiten_total_mean": post_total_stats["mean"],
+                "post_whiten_total_abs_mean": post_total_stats["abs_mean"],
+                "post_whiten_total_std": post_total_stats["std"],
+            }
+        )
+
+    diagnostics["events"] = event_rows
+    return diagnostics
+
+
 class AdaptiveKLController:
     """
     Adaptive KL controller described in the paper:
@@ -478,6 +571,7 @@ def compute_gdpo_outcome_advantage(
     score_list = None
     reward_weights = None
     gdpo_saturation_info = None
+    reward_key_order = None
 
     if config is not None and non_tensor_batch is not None and batch is not None:
         gdpo_reward_keys = config.get("gdpo_reward_keys", None)
@@ -490,6 +584,7 @@ def compute_gdpo_outcome_advantage(
         valid_response_length = batch["attention_mask"][:, prompt_length:].sum(dim=1) - 1
 
         score_list = []
+        reward_key_order = list(gdpo_reward_keys)
         gdpo_saturation_info = {
             "per_reward": {},
             "events": [],
@@ -532,6 +627,7 @@ def compute_gdpo_outcome_advantage(
         reward_weights = [1.0] * num_scores
 
     new_advantage = None
+    weighted_components: list[torch.Tensor] = []
 
     for i in range(num_scores):
         normalized_score, _ = compute_grpo_outcome_advantage(
@@ -542,11 +638,13 @@ def compute_gdpo_outcome_advantage(
             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
             config=config,
         )
+        weighted_component = weights[i] * normalized_score
+        weighted_components.append(weighted_component)
 
         if new_advantage is None:
-            new_advantage = weights[i] * normalized_score
+            new_advantage = weighted_component
         else:
-            new_advantage += weights[i] * normalized_score
+            new_advantage += weighted_component
 
     advantages = verl_F.masked_whiten(new_advantage, response_mask) * response_mask
 
@@ -557,6 +655,18 @@ def compute_gdpo_outcome_advantage(
             float(len(saturated_group_ids) / float(group_count)) if group_count > 0 else 0.0
         )
         meta_info["gdpo_saturation"] = gdpo_saturation_info
+        if reward_key_order is not None:
+            per_reward_components = {
+                reward_name: weighted_components[i] for i, reward_name in enumerate(reward_key_order)
+            }
+            meta_info["gdpo_advantage_diagnostics"] = _build_gdpo_advantage_diagnostics(
+                per_reward_components=per_reward_components,
+                pre_whiten_total=new_advantage,
+                post_whiten_total=advantages,
+                response_mask=response_mask,
+                saturation_events=gdpo_saturation_info["events"],
+                index=index,
+            )
 
     return advantages, advantages
 
