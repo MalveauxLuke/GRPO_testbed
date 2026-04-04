@@ -1,30 +1,34 @@
 # GSM8K Modern Two-Reward Baseline Spec
 
-This note explains what the modern GSM8K baseline actually is in concrete terms:
+This note explains what the active GSM8K modern baseline actually is in concrete
+terms:
 
 - what the processed dataset looks like
 - how the model is prompted
 - what `format_reward` and `correct_reward` mean
 - what extra fields are carried for auditing
 
-All claims below are tied back to the implementation.
+All claims below are tied back to the implementation in:
+
+- [gsm8k_modern_two_reward.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py)
+- [prepare_gsm8k_modern.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_modern.sh)
+- [verify_gsm8k_modern_baseline.py](/Users/god/Documents/VERL_GRPO/scripts/sol/verify_gsm8k_modern_baseline.py)
 
 ## Source Dataset
 
-The processed baseline is built from the official GSM8K `main` split, but it is built on top of the already-prepared upstream GSM8K parquet created by:
+The processed baseline is built from the official GSM8K `main` split on top of
+the already-prepared upstream GSM8K parquet. The modern transform:
 
-- [prepare_gsm8k.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k.sh#L1)
-- upstream preprocess script [gsm8k.py](/Users/god/Documents/VERL_GRPO/external/verl/examples/data_preprocess/gsm8k.py#L1)
+- recovers the original raw GSM8K `question` and `answer`
+- extracts the gold answer from the source solution’s final `#### number`
+- rebuilds each example into the repo-native structured chat format
 
-The modern dataset transform itself is implemented in:
-
-- [prepare_gsm8k_modern.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_modern.sh#L1)
-
-It reads the upstream parquet rows, recovers the original raw GSM8K `question` and `answer` from `extra_info`, and then rebuilds each example into the structured modern format at [prepare_gsm8k_modern.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_modern.sh#L37).
+The generated-output schema is tags-only. The source-side `####` convention is
+still used only for gold-answer extraction.
 
 ## Dataset Row Shape
 
-Each processed row is created in [prepare_gsm8k_modern.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_modern.sh#L49) and has this shape:
+Each processed row has this shape:
 
 ```json
 {
@@ -43,243 +47,171 @@ Each processed row is created in [prepare_gsm8k_modern.sh](/Users/god/Documents/
     "source_dataset": "openai/gsm8k",
     "source_subset": "main",
     "baseline_name": "gsm8k_modern_two_reward",
-    "alignment_spec_version": "2026-04-03-hybrid-hash-strict-format"
+    "alignment_spec_version": "2026-04-03-coupled-soft-format"
   }
 }
 ```
 
-The exact field construction happens at:
+Important fields:
 
-- [prepare_gsm8k_modern.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_modern.sh#L61)
+- `prompt`
+  - built from one `system` message and one `user` message
+- `reward_model.ground_truth`
+  - the numeric GSM8K gold answer extracted from the source raw `answer` field’s final `#### number`
+- `extra_info`
+  - preserves the raw source question/answer plus split/index and baseline metadata
 
-### Important fields
+The prep metadata also records:
 
-`data_source`
-- fixed to `openai/gsm8k_modern_two_reward`
-- defined in [gsm8k_modern_two_reward.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L33)
+- `structured_output_schema`
+- `gold_answer_extraction`
 
-`prompt`
-- a two-message chat prompt built by [build_prompt](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L89)
-- contains one `system` message and one `user` message
-
-`reward_model.ground_truth`
-- the final numeric GSM8K answer
-- extracted from the original worked solution using [extract_hash_answer](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L96)
-- the transform cross-checks that this matches the upstream parquet ground truth at [prepare_gsm8k_modern.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/prepare_gsm8k_modern.sh#L52)
-
-`extra_info`
-- preserves the original raw question and answer for auditability
-- also stores split/index and baseline metadata
+so the generated-output contract and source-answer convention are visible in the
+output directory itself.
 
 ## How The Model Is Prompted
 
-The prompt is built by [build_prompt](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L89).
-
-The exact system prompt is defined in [gsm8k_modern_two_reward.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L34):
+The model is instructed to answer with exactly:
 
 ```text
-You are a mathematical reasoning assistant. Solve the user's problem and respond using exactly this format with no extra text before or after the structured answer:
 <reasoning>your step-by-step reasoning</reasoning>
-#### final numeric answer
 <answer>final numeric answer</answer>
 ```
 
-So the model sees:
+So the active contract is:
 
-- `system`: the structured-output instruction above
-- `user`: the original GSM8K question text
+- generated outputs use repo-native `<reasoning>/<answer>` tags only
+- source GSM8K gold answers still come from the original source `#### number`
 
-This means the baseline is using a hybrid contract:
-
-- modern structured chat tags for formatting
-- an explicit `#### final answer` marker for correctness
-- the original GSM8K `#### number` convention for gold-answer extraction
-
-During evaluation, the stored chat prompt is rendered with the tokenizer chat template in:
-
-- [eval_gsm8k_modern.py](/Users/god/Documents/VERL_GRPO/scripts/sol/eval_gsm8k_modern.py#L65)
-
-During training, the same `prompt` field is what verl consumes from the parquet configured in:
-
-- [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh#L49)
+This is the coupled tags-only baseline used for trainability.
 
 ## Reward Criteria
 
-The reward module is:
-
-- [gsm8k_modern_two_reward.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L15)
-
-It exposes:
+The reward module exposes:
 
 - `format_reward`
 - `correct_reward`
 - `score = format_reward + correct_reward`
 
-The combined reward output is returned by [compute_score](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L155).
-
 ### Structured parsing requirement
 
-The exact-format sub-signal depends on successful structured parsing by:
+The strict parser:
 
-- [parse_structured_response](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L123)
+- strips common assistant wrapper tokens first
+- requires exactly one `<reasoning>...</reasoning>` block followed by one `<answer>...</answer>` block
+- allows only surrounding whitespace outside the tags
+- rejects nested `<reasoning>` / `<answer>` tags inside the parsed blocks
+- requires the `<answer>` contents to be numerically parseable
 
-This parser does all of the following:
-
-1. strips common assistant wrapper tokens first via:
-   - [_strip_assistant_wrapper](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L111)
-2. requires the response to match:
-   - one `<reasoning>...</reasoning>` block
-   - followed by one parseable numeric `#### ...` line
-   - followed by one parseable numeric `<answer>...</answer>` block
-   - no extra text before or after the structured response
-3. rejects responses where nested or duplicated `<reasoning>` / `<answer>` tags appear inside the parsed blocks:
-   - [gsm8k_modern_two_reward.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L129)
-4. normalizes the answer text with:
-   - whitespace removal
-   - comma removal
-   - dollar-sign removal
-   - [normalize_numeric_text](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L103)
-5. requires both the normalized `####` text and the normalized `<answer>` text to be numerically parseable
-
-Strict parsing only controls the exact-format sub-signal. Correctness is scored
-separately from the final `#### ...` marker.
+If strict parsing fails, `parsed_answer` is empty and `correct_reward` is `0`.
 
 ### `format_reward`
 
-`format_reward` is defined in:
+`format_reward` is intentionally non-binary:
 
-- [compute_format_reward](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L142)
+```text
+format_reward = 0.5 * strict_format_reward + 0.5 * approx_format_reward
+```
 
-It is a bounded blend of:
+Where:
 
-- exact structured-output compliance
-- approximate tag-level format credit
+- `strict_format_reward`
+  - `1.0` only when the exact tags-only structure parses cleanly and `<answer>` is numeric
+  - otherwise `0.0`
+- `approx_format_reward`
+  - uses the cookbook-style tag-count heuristic
+  - each required tag contributes `+0.5` if it appears exactly once and `-0.5` otherwise
+  - the raw score in `[-2, 2]` is normalized back to `[0, 1]`
 
-So `format_reward = 1` means all of the following were true:
+That yields representative values like:
 
-- the response used the exact `<reasoning>...</reasoning>`, `#### ...`, `<answer>...</answer>` structure
-- the hash line was present and numerically parseable
-- the answer block was present
-- the answer block was numeric-looking
-- there was no trailing junk
-- there were no duplicated or nested tags
-- missing `####` therefore prevents full strict-format credit, even if the tags are otherwise perfect
-- the approximate sub-signal still only looks at tag presence, so missing `####` can still earn partial format credit
+- `1.0`
+  - exact valid `<reasoning>` + numeric `<answer>`
+- `0.5`
+  - all four tags appear once, but strict parsing fails
+  - examples: wrong order, trailing junk, empty `<answer>`, non-numeric `<answer>`
+- `0.25`
+  - only one tag pair is present or tag counts are duplicated badly
+  - examples: reasoning-only, answer-only, duplicated reasoning tags
+- `0.0`
+  - plain text with no usable tag scaffold
 
-Values between `0` and `1` mean the response had some of the expected tags but
-did not satisfy the full exact structure. It does **not** mean the numeric
-answer was correct. It only means the structured output schema was obeyed fully
-or partially.
+`format_reward` measures structure only. It does not mean the numeric answer is
+correct.
 
 ### `correct_reward`
 
-`correct_reward` is defined in:
+`correct_reward` is binary and coupled to the structured answer parse:
 
-- [compute_correct_reward](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L148)
+- parse the predicted answer only from the strict `<answer>...</answer>` span
+- if strict parsing fails, correctness is `0`
+- compare that parsed numeric answer against the GSM8K gold answer
 
-It is binary:
+Numeric equivalence is intentionally forgiving for formatting, while remaining
+binary:
 
-- `1.0` if a valid numeric answer can be extracted from the final `#### ...`
-  marker and that numeric value is equivalent to the gold GSM8K answer
-- `0.0` otherwise
+- `72` and `72.0`
+- `0.5` and `0.50`
+- `1,234` and `$1,234`
+- `1/2` and `0.5`
+- `7.2e1` and `72`
 
-The gold answer comes from the original GSM8K `answer` field by extracting the final `#### number` at:
-
-- [extract_hash_answer](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L96)
-
-Extraction is intentionally narrow:
-
-- only the final `#### ...` marker is used for correctness
-- reasoning text is ignored for correctness
-- malformed, empty, non-numeric, or ambiguous `<answer>` contents do not rescue correctness
-
-Normalization is intentionally light:
-
-- trim spaces
-- remove commas
-- remove `$`
-- collapse internal whitespace
-
-That behavior is implemented in:
-
-- [normalize_numeric_text](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L103)
-
-This means examples like these are treated as equivalent:
-
-- `1234`
-- `1,234`
-- ` $1,234 `
-- `72`
-- `72.0`
-- `0.5`
-- `0.50`
-- `1/2`
-- `7.2e1`
+There is no response-wide fallback, no reasoning-text rescue, and no separate
+extractability reward.
 
 ### `score`
 
-The combined `score` is defined in:
-
-- [compute_score](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L155)
-
-It is simply:
+The combined score is simply:
 
 ```text
 score = format_reward + correct_reward
 ```
 
-Representative values are:
+Representative totals:
 
-- `0.0`: no useful format signal and no correct numeric answer
-- `0.5`: correct-looking tags but missing `####`, or another tag-only partial-format case with no correctness
-- `1.0`: either valid-format-but-wrong-answer, or wrong-format-but-correct-answer with no format credit
-- `1.25` / `1.5`: wrong-format-but-correct-answer with partial format credit
-- `2.0`: valid exact format and correct answer
+- `0.0`
+  - no usable format and no correct answer
+- `0.25`
+  - partial tag scaffold only
+- `0.5`
+  - good tag scaffold but failed strict parse, so zero correctness
+- `1.0`
+  - valid format but wrong answer
+- `2.0`
+  - valid exact format and numerically correct answer
 
-### Extra diagnostic fields
+## Extra Diagnostic Fields
 
 `compute_score` also returns:
 
-- `hash_answer`
-- `tag_answer`
-- `hash_parse_ok`
-- `tag_answer_parse_ok`
-- `hash_answer_equals_tag_answer`
+- `strict_format_reward`
+- `approx_format_reward`
+- `answer_parse_ok`
+- `parsed_answer`
+- `expected_answer`
 
-These are included in [compute_score](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L217) and are useful for audits and debugging, even though the training objective only uses `score`, `correct_reward`, and `format_reward`.
-
-## Training Configuration Hooks
-
-The debug GDPO wrapper points training at this baseline here:
-
-- dataset files: [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh#L49)
-- reward keys: [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh#L47)
-- custom reward module path: [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh#L86)
-
-So the intended GDPO multi-reward setup is explicitly:
-
-- `algorithm.gdpo_reward_keys=["correct_reward","format_reward"]`
+These are useful for audits and rollout inspection, even though training only
+uses `score`, `correct_reward`, and `format_reward`.
 
 ## What This Baseline Is Not
 
 This baseline intentionally does **not** include:
 
-- length reward
-- numeric extractability as a separate third reward key
+- generated-output `####` markers
+- response-wide correctness fallback
+- numeric extractability as a separate reward key
 - ratio-based partial-credit correctness
-
-Those exclusions are declared in the alignment spec in:
-
-- [gsm8k_modern_two_reward.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/utils/reward_score/gsm8k_modern_two_reward.py#L41)
+- length reward
 
 ## Bottom Line
 
 This baseline is:
 
-- official GSM8K answers and questions underneath
-- repackaged into a modern structured chat prompt
+- official GSM8K questions and source answers underneath
+- repackaged into a tags-only structured chat prompt
 - rewarded with exactly two public channels:
-  - a blended strict-plus-approximate `format_reward` whose strict sub-signal requires `####`
-  - an independent binary numeric `correct_reward`
+  - a soft blended `format_reward`
+  - a coupled binary `correct_reward` derived from the same strict `<answer>` parse
 
-That makes it a clean, minimal modern multi-reward GSM8K setup for saturation measurement.
+That makes it a trainable, minimal modern two-reward GSM8K baseline for the
+next saturation check.

@@ -141,9 +141,9 @@ def test_artifact_audit_detects_logged_reward_mismatch(tmp_path):
 
     assert summary["total_samples"] == 1
     assert summary["samples_with_any_mismatch"] == 1
-    assert summary["field_mismatch_counts"]["format_reward"] == 1
+    assert summary["field_mismatch_counts"]["correct_reward"] == 1
     assert summary["field_mismatch_counts"]["score"] == 1
-    assert mismatches[0]["mismatch_fields"] == ["score", "format_reward"]
+    assert mismatches[0]["mismatch_fields"] == ["score", "correct_reward"]
 
 
 def test_reference_audit_passes_with_matching_alignment_and_docs(tmp_path, monkeypatch):
@@ -152,10 +152,10 @@ def test_reference_audit_passes_with_matching_alignment_and_docs(tmp_path, monke
         (
             "Two rewards.\n"
             "No length reward.\n"
-            "Structured format with <reasoning>, ####, and <answer>.\n"
+            "Structured format with <reasoning> and <answer>.\n"
             "Approximate format credit is blended into format_reward.\n"
-            "Full strict format requires the #### marker.\n"
-            "Correctness uses a hash marker and numeric equivalence independent of strict format parsing.\n"
+            "Correctness is coupled to the structured answer parse and uses numeric equivalence.\n"
+            "Source GSM8K gold answers still come from the source #### answer.\n"
         ),
         encoding="utf-8",
     )

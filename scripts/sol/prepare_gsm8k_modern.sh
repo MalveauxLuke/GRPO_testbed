@@ -101,6 +101,8 @@ metadata = {
     "data_source": DATA_SOURCE,
     "source_dataset": "openai/gsm8k",
     "source_subset": "main",
+    "structured_output_schema": ALIGNMENT_SPEC["structured_output"]["schema"],
+    "gold_answer_extraction": "source_gsm8k_answer_field_final_hash_number",
     "train_examples": len(train_rows),
     "test_examples": len(test_rows),
     "reward_names": ["correct_reward", "format_reward"],

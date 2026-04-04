@@ -16,12 +16,12 @@
 
 This module intentionally implements a minimal modern GSM8K multi-reward setup:
 - format_reward: bounded strict+approximate structured-output compliance
-- correct_reward: hash-marker-only normalized numeric answer correctness
+- correct_reward: structured-answer-only normalized numeric answer correctness
 
 It is reference-derived, not a novel reward design:
 - data origin and gold-answer extraction follow official GSM8K / upstream verl
-- structured output and separate format/correctness channels follow the modern
-  structured GSM8K family used in public cookbook/paper examples
+- the tags-only output contract follows the simpler public GRPO/GSM8K cookbook
+  family where answer correctness is extracted from the structured answer span
 - the exact/approximate format split is adapted from the Hugging Face advanced
   GRPO cookbook, but folded back into a single public `format_reward` key so
   our GDPO contract stays `correct_reward + format_reward`
@@ -37,38 +37,37 @@ from typing import Any
 DATA_SOURCE = "openai/gsm8k_modern_two_reward"
 SYSTEM_PROMPT = (
     "You are a mathematical reasoning assistant. Solve the user's problem and respond using exactly "
-    "this format with no extra text before or after the structured answer:\n"
+    "this format with no extra text before or after the tags:\n"
     "<reasoning>your step-by-step reasoning</reasoning>\n"
-    "#### final numeric answer\n"
     "<answer>final numeric answer</answer>"
 )
 
 ALIGNMENT_SPEC = {
     "baseline_name": "gsm8k_modern_two_reward",
-    "version": "2026-04-03-hybrid-hash-strict-format",
+    "version": "2026-04-03-coupled-soft-format",
     "dataset_source": {
         "name": "openai/gsm8k",
         "subset": "main",
         "precedent": "official_gsm8k_and_upstream_verl_preprocess",
     },
     "structured_output": {
-        "schema": "<reasoning>...</reasoning>\n#### ...\n<answer>...</answer>",
-        "precedent": "upstream_gsm8k_hash_answer_plus_modern_structured_gsm8k_tags",
+        "schema": "<reasoning>...</reasoning>\n<answer>...</answer>",
+        "precedent": "hf_grpo_cookbook_style_structured_gsm8k",
     },
     "rewards": {
         "format_reward": "bounded_blend_of_strict_and_approximate_structured_output_compliance",
-        "correct_reward": "hash_marker_only_numeric_equivalence_against_gsm8k_final_answer",
+        "correct_reward": "structured_answer_only_numeric_equivalence_against_gsm8k_final_answer",
     },
     "simplifications": [
         "two_rewards_not_three_or_four",
         "binary_numeric_equivalence_not_ratio_based_partial_credit",
         "format_reward_bakes_in_strict_plus_approximate_structure_signals",
-        "correctness_not_format_gated",
-        "correctness_uses_hash_marker_only",
+        "correctness_coupled_to_structured_answer_parse",
         "no_response_wide_fallback_correctness",
         "no_length_reward",
     ],
     "excluded_features": [
+        "generated_output_hash_marker",
         "length_reward",
         "ratio_based_partial_credit_correctness",
         "separate_third_numeric_extraction_reward",
@@ -78,10 +77,9 @@ ALIGNMENT_SPEC = {
 
 _HASH_ANSWER_PATTERN = re.compile(r"####\s*(?P<answer>[^\n<]+)")
 _STRUCTURED_RESPONSE_PATTERN = re.compile(
-    r"^\s*<reasoning>(?P<reasoning>.*?)</reasoning>\s*####\s*(?P<hash>[^\n<]+)\s*<answer>(?P<answer>.*?)</answer>\s*$",
+    r"^\s*<reasoning>(?P<reasoning>.*?)</reasoning>\s*<answer>(?P<answer>.*?)</answer>\s*$",
     re.DOTALL,
 )
-_ANSWER_SECTION_PATTERN = re.compile(r"<answer>(?P<answer>.*?)</answer>", re.DOTALL)
 _ASSISTANT_WRAPPER_PATTERNS = (
     re.compile(r"<\|im_start\|>assistant\s*", re.IGNORECASE),
     re.compile(r"<\|start_header_id\|>assistant<\|end_header_id\|>\s*", re.IGNORECASE),
@@ -164,28 +162,6 @@ def _strip_assistant_wrapper(solution_str: str) -> str:
     return text.strip()
 
 
-def extract_hash_answer_from_response(solution_str: str) -> str:
-    response = _strip_assistant_wrapper(solution_str)
-    matches = _HASH_ANSWER_PATTERN.findall(response)
-    if not matches:
-        return ""
-    candidate = normalize_numeric_text(matches[-1])
-    if _parse_numeric_value(candidate) is None:
-        return ""
-    return candidate
-
-
-def extract_tag_answer(solution_str: str) -> str:
-    response = _strip_assistant_wrapper(solution_str)
-    answer_section_match = _ANSWER_SECTION_PATTERN.search(response)
-    if answer_section_match is None:
-        return ""
-    candidate = normalize_numeric_text(answer_section_match.group("answer"))
-    if _parse_numeric_value(candidate) is None:
-        return ""
-    return candidate
-
-
 def parse_structured_response(solution_str: str) -> tuple[int, str]:
     response = _strip_assistant_wrapper(solution_str)
     match = _STRUCTURED_RESPONSE_PATTERN.match(response)
@@ -193,13 +169,10 @@ def parse_structured_response(solution_str: str) -> tuple[int, str]:
         return 0, ""
 
     reasoning_text = match.group("reasoning")
-    hash_text = normalize_numeric_text(match.group("hash"))
     answer_text_raw = match.group("answer")
     if any(tag in reasoning_text for tag in _FORBIDDEN_INNER_TAGS):
         return 0, ""
     if any(tag in answer_text_raw for tag in _FORBIDDEN_INNER_TAGS):
-        return 0, ""
-    if _parse_numeric_value(hash_text) is None:
         return 0, ""
 
     answer_text = normalize_numeric_text(answer_text_raw)
@@ -247,7 +220,7 @@ def compute_format_reward(solution_str: str, ground_truth: str, extra_info: dict
 
 def compute_correct_reward(solution_str: str, ground_truth: str, extra_info: dict[str, Any] | None = None) -> float:
     del extra_info
-    predicted_answer = extract_hash_answer_from_response(solution_str)
+    _, predicted_answer = parse_structured_response(solution_str)
     expected_answer = normalize_numeric_text(ground_truth)
     return 1.0 if predicted_answer != "" and _is_numeric_equivalent(predicted_answer, expected_answer) else 0.0
 
@@ -261,22 +234,17 @@ def compute_score(data_source, solution_str, ground_truth, extra_info, **kwargs)
         (_FORMAT_REWARD_STRICT_WEIGHT * strict_format_reward)
         + (_FORMAT_REWARD_APPROX_WEIGHT * approx_format_reward)
     )
-    hash_answer = extract_hash_answer_from_response(solution_str)
-    tag_answer = extract_tag_answer(solution_str)
+    _, parsed_answer = parse_structured_response(solution_str)
     expected_answer = normalize_numeric_text(ground_truth)
-    correct_reward = 1.0 if hash_answer != "" and _is_numeric_equivalent(hash_answer, expected_answer) else 0.0
+    correct_reward = 1.0 if parsed_answer != "" and _is_numeric_equivalent(parsed_answer, expected_answer) else 0.0
     result = {
         "score": float(format_reward + correct_reward),
         "correct_reward": float(correct_reward),
         "format_reward": float(format_reward),
         "strict_format_reward": float(strict_format_reward),
         "approx_format_reward": float(approx_format_reward),
-        "hash_answer": hash_answer,
-        "tag_answer": tag_answer,
-        "hash_parse_ok": float(hash_answer != ""),
-        "tag_answer_parse_ok": float(tag_answer != ""),
-        "hash_answer_equals_tag_answer": float(
-            hash_answer != "" and tag_answer != "" and _is_numeric_equivalent(hash_answer, tag_answer)
-        ),
+        "answer_parse_ok": float(parsed_answer != ""),
+        "parsed_answer": parsed_answer,
+        "expected_answer": expected_answer,
     }
     return result
