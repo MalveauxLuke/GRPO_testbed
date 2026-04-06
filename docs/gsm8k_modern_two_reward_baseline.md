@@ -1,91 +1,34 @@
 # GSM8K Modern Two-Reward Baseline
 
-This note records the public precedents and intentional simplifications for the
-modern GSM8K saturation baseline.
+This compatibility note stays at its original path because audit tooling points
+to it by default.
 
-## Goal
+The active runnable workflow is now [docs/workflows/gsm8k.md](/Users/god/Documents/VERL_GRPO/docs/workflows/gsm8k.md).
 
-Run a normal-looking GSM8K reasoning setup for the `Qwen/Qwen2.5-Instruct`
-that uses modern structured outputs and exactly two public reward keys:
+## Current contract
 
-- `correct_reward`
-- `format_reward`
+- reward keys:
+  - `correct_reward`
+  - `format_reward`
+- output format:
+  - `<reasoning>...</reasoning>`
+  - `<answer>final_numeric_answer</answer>`
+- gold answer source:
+  - original GSM8K trailing `#### number`
 
-The baseline is for saturation measurement, not reward-design novelty.
+## Current reward meaning
 
-## Public Precedents
+`correct_reward`:
+- requires exactly one clean numeric `<answer>...</answer>` span
+- does not require strict reasoning structure
+- compares numerically against the GSM8K gold answer
 
-- Official GSM8K / upstream verl data flow:
-  - raw `question` / `answer`
-  - final numeric answer recovered from the trailing `#### number`
-- Modern structured GSM8K multi-reward family:
-  - structured reasoning/answer outputs
-  - correctness extracted from the structured answer span
-  - separate exact and approximate format shaping
-  - reflected in the Hugging Face GRPO cookbook family and the upstream verl GDPO example style
+`format_reward`:
+- blends strict structured compliance with approximate tag credit
+- remains a separate shaping dimension
 
-## Chosen Structured Format
+## Historical notes
 
-The model is instructed to answer using:
-
-```text
-<reasoning> ... </reasoning>
-<answer> final_numeric_answer </answer>
-```
-
-This keeps the repo-native tags-only contract for generated outputs. The source
-GSM8K gold answer still comes from the original worked solution’s trailing
-`#### number`.
-
-## Rewards
-
-### `format_reward`
-
-A bounded blend of two public precedents:
-
-- exact structured-output compliance
-- approximate tag-level format credit
-
-Concretely:
-
-- exact format requires one clean `<reasoning>...</reasoning>` block and one parseable numeric `<answer>...</answer>` block in the right order, with no extra text before or after
-- the `<answer>` field must be numeric-looking for full strict format credit
-- approximate format gives partial credit when the expected tags appear even if the overall structure is imperfect
-- the final `format_reward` is `0.5 * strict_format_reward + 0.5 * approx_format_reward`
-- the two are blended back into a single `format_reward` so the GDPO contract stays two-dimensional
-
-### `correct_reward`
-
-Binary answer-tag numeric correctness:
-
-- strip assistant wrappers first
-- require exactly one clean numeric `<answer>...</answer>` span
-- do not require the `<reasoning>` block to be well formed for correctness
-- compare numerically against the GSM8K gold answer parsed from the original source `#### number`
-- treat numeric equivalents like `72` and `72.0` as correct
-- support decimals, negatives, commas, `$`, fractions, and scientific notation
-- reject duplicate `<answer>` tags, nested tags inside `<answer>`, malformed numeric answers, reasoning-text rescue, and plain-text fallbacks
-
-## Intentional Simplifications
-
-- Two rewards, not three or four
-- Binary numeric equivalence, not ratio-based partial credit
-- One public `format_reward`, even though it internally blends strict and approximate format signals
-- Correctness uses a single clean answer tag, not the full strict structured parse
-- No response-wide correctness fallback
-- No length reward
-- No separate third numeric-extraction reward
-
-## Explicit Exclusions
-
-Not part of this baseline:
-
-- generated-output `####` markers
-- `numeric_extractability` as a separate reward key
-- ratio-based partial-credit correctness
-- length-aware rewards
-- response-wide correctness fallback
-- efficiency-focused reward shaping
-
-Those are valid follow-up experiments, but they would no longer represent the
-cleanest minimal modern multi-reward GSM8K baseline.
+Archived supporting material now lives under:
+- [docs/archive/gsm8k](/Users/god/Documents/VERL_GRPO/docs/archive/gsm8k)
+- [docs/archive/daily_logs](/Users/god/Documents/VERL_GRPO/docs/archive/daily_logs)

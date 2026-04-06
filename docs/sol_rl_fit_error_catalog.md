@@ -1,42 +1,5 @@
-# SOL RL Fit Error Catalog
+# Moved
 
-Use this catalog before creating or editing any active SOL RL wrapper for:
+The active short troubleshooting guide is now [docs/reference/troubleshooting.md](/Users/god/Documents/VERL_GRPO/docs/reference/troubleshooting.md).
 
-- modern GSM8K GDPO
-- DeepScaleR-style math-length GRPO/GDPO
-
-This catalog is about launcher and runtime-fit failures. It does not replace dataset/reward authenticity checks such as:
-
-- [gsm8k_modern_two_reward_verification_proof.md](/Users/god/Documents/VERL_GRPO/docs/gsm8k_modern_two_reward_verification_proof.md)
-- [verify_gsm8k_modern_baseline.py](/Users/god/Documents/VERL_GRPO/scripts/sol/verify_gsm8k_modern_baseline.py)
-- [audit_math_length_rewards.py](/Users/god/Documents/VERL_GRPO/scripts/sol/audit_math_length_rewards.py)
-
-| Failure class | Symptom / exact log signature | Likely root cause | Prior in-repo evidence | Affected knobs / files | Preflight check that would have caught it | Canonical fix | Blocks |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Wrong Python/env path or missing package | `ModuleNotFoundError: verl`; `No module named 'datasets'`; missing `math-verify` import | Wrapper launched outside the intended env, wrong interpreter on PATH, or user-site contamination | [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh), [verify_install.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/verify_install.sh), [sol_fresh_terminal_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_fresh_terminal_checklist.md) | shell activation, `sol_python`, `PYTHONNOUSERSITE`, reward deps | `source scripts/sol/common_env.sh && sol_activate_env && python -c "import datasets, verl"` | Always source [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh), activate the env, and launch Python via `sol_python` | Both |
-| Slurm QoS / walltime mismatch | `sbatch: error: QOSMaxWallDurationPerJobLimit` | Selected QoS does not allow the requested walltime | [gdpo_gsm8k_modern_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_smoke.sbatch), [gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch), [grpo_math_length_debug.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_math_length_debug.sbatch) | `#SBATCH --partition`, `#SBATCH --qos`, `#SBATCH --time` | Compare the new sbatch shape to the closest existing wrapper for the same run class before editing | Reuse the existing smoke/full shapes unless the new walltime requirement is explicitly re-derived | Both |
-| FlashAttention / binary incompatibility | `ImportError: /lib64/libc.so.6: version 'GLIBC_2.32' not found`; `flash_attn_2_cuda` import failure | SOL node image cannot load the upstream FlashAttention wheel path | [asu_sol_upstream_verl_grpo.md](/Users/god/Documents/VERL_GRPO/docs/asu_sol_upstream_verl_grpo.md), [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh), [run_math_length_common.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_math_length_common.sh) | `attn_implementation`, actor/ref model init path | Confirm actor and ref both force `+...override_config.attn_implementation=eager` | Keep the SOL-compatible eager overrides until FlashAttention is explicitly revalidated on SOL | Both |
-| Batch-shape arithmetic mismatch | `AssertionError: normalized ppo_mini_batch_size ... should be divisible by ppo_micro_batch_size_per_gpu ...` | Copied public hyperparameters without re-deriving actor mini-batch normalization for the current `rollout.n` and GPU count | [run_gdpo_gsm8k_modern_realistic.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_realistic.sh), [run_gdpo_gsm8k_modern_fit_2gpu.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh), [run_math_length_common.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_math_length_common.sh), [fsdp_workers.py](/Users/god/Documents/VERL_GRPO/external/verl/verl/workers/fsdp_workers.py) | `ppo_mini_batch_size`, `ppo_micro_batch_size_per_gpu`, `rollout.n`, GPU count | Write out `ppo_mini_batch_size * rollout.n / total_gpus` and prove each micro-batch divides it | Use shared batch-math helpers and derive or validate all micro-batches before launch | Both |
-| Smoke/full memory-shape drift | Smoke run no longer answers whether the real config fits because batch, response, micro-batch, or GPU-utilization knobs changed silently | Using a smoke job as an integration test while still calling it a realistic preflight | [gdpo_gsm8k_modern_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_smoke.sbatch), [gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch), [sol_rl_fit_guide.md](/Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_guide.md) | smoke sbatch overrides, response length, batch sizes, micro-batches, GPU-utilization knobs | Classify the smoke in writing: `feasibility-smoke` or `integration-smoke`; then diff memory-shaping knobs against the full run | If the smoke is meant to predict the full run, only shorten duration and cadence | Smoke, and therefore full go/no-go |
-| Load-time worker death during model init | Ray `ActorDiedError`; `Worker exit type: SYSTEM_ERROR`; `End of file`; failure during `Loading weights` | Memory pressure during actor/rollout/ref init, often in colocated topology | [run_gdpo_gsm8k_modern_realistic.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_realistic.sh), [run_gdpo_gsm8k_modern_fit_2gpu.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_fit_2gpu.sh), [run_math_length_common.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_math_length_common.sh) | TP size, `gpu_memory_utilization`, offload flags, `use_shm`, `skip_tokenizer_init`, rollout worker shape | Compare the wrapper against both the public example and the low-resource/tuning reference before launch | Move to the supported fit profile or split placement; do not keep blind-tweaking a failing colocated profile | Both |
-| Math-proven rollout safety knobs omitted | Failures cluster around tokenizer init, remove-padding, or rollout worker overhead on SOL | Math-side SOL-safe runtime guards were not preserved when creating a new wrapper | [run_math_length_common.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_math_length_common.sh), [run_gdpo_gsm8k_modern_debug.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/run_gdpo_gsm8k_modern_debug.sh), [asu_sol_upstream_verl_grpo.md](/Users/god/Documents/VERL_GRPO/docs/asu_sol_upstream_verl_grpo.md) | `use_remove_padding`, `skip_tokenizer_init`, `agent.num_workers`, rollout eager mode | Check whether the new wrapper is fit-constrained; if yes, compare these knobs against the debug-safe math and GSM8K profiles | For SOL fit profiles, prefer `use_remove_padding=False`, `skip_tokenizer_init=True`, `agent.num_workers=1`, and explicit eager rollout mode unless revalidated otherwise | Both |
-| Past SOL launcher/platform regressions | Wrong project root under Slurm spool; mixed CUDA/ROCm device env; startup fails before trainer logic | New wrapper hand-rolls launcher/bootstrap logic instead of reusing the hardened SOL prologue | [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh), [gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch](/Users/god/Documents/VERL_GRPO/slurm/gdpo_gsm8k_modern_fit_2gpu_smoke.sbatch), [grpo_math_length_debug.sbatch](/Users/god/Documents/VERL_GRPO/slurm/grpo_math_length_debug.sbatch) | `PROJECT_ROOT` discovery, GPU visibility env, env activation prologue | Reuse the standard Slurm prologue and [common_env.sh](/Users/god/Documents/VERL_GRPO/scripts/sol/common_env.sh) helpers exactly | Copy the hardened sbatch/bootstrap pattern first, then change only the training knobs you intend to change | Both |
-
-## Before creating a new config
-
-1. Start from [sol_rl_fit_config_creation_checklist.md](/Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_config_creation_checklist.md), not from a blank file.
-2. Pick one upstream anchor, one closest prior working local config, and one relevant failure row before touching the wrapper.
-3. Decide whether the change is:
-   - semantic
-   - profile-only
-   - SOL compatibility-only
-4. If the run is fit-constrained, compare it against both:
-   - the closest public/reference profile
-   - the closest debug-safe or fit-first local profile
-
-## When triaging a failed job
-
-1. Match the first decisive error string to the table above before changing any knobs.
-2. If the failure is during `Loading weights`, treat it as an init-fit problem first, not a reward bug.
-3. If the job never reached a real rollout step, fix launcher/fit issues before running reward audits.
-4. If rollout dumps exist, run the workflow-specific post-run audit command before trusting the metrics.
+The archived detailed version is at [docs/archive/legacy_guides/sol_rl_fit_error_catalog.md](/Users/god/Documents/VERL_GRPO/docs/archive/legacy_guides/sol_rl_fit_error_catalog.md).

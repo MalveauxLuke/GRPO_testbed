@@ -9,14 +9,34 @@
 # - Required manual gate before edits: /Users/god/Documents/VERL_GRPO/docs/sol_rl_fit_config_creation_checklist.md
 set -euo pipefail
 
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+  shift
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/common_env.sh"
 
-sol_require_slurm_allocation
 sol_ensure_runtime_dirs
 sol_ensure_upstream_checkout
-sol_activate_env
+if (( ! DRY_RUN )); then
+  sol_require_slurm_allocation
+fi
+export SOL_DRY_RUN_ONLY="${DRY_RUN}"
+
+PYTHON_BIN=""
+if (( DRY_RUN )); then
+  if [[ -d "/scratch" && -w "/scratch" ]] && sol_activate_env >/dev/null 2>&1; then
+    PYTHON_BIN="$(sol_python)"
+  else
+    PYTHON_BIN="<run 'source scripts/sol/common_env.sh && sol_activate_env' to resolve python>"
+  fi
+else
+  sol_activate_env
+  PYTHON_BIN="$(sol_python)"
+fi
 
 [[ -f "${GSM8K_MODERN_DIR}/train.parquet" ]] || sol_fail "Missing ${GSM8K_MODERN_DIR}/train.parquet. Run scripts/sol/prepare_gsm8k_modern.sh first."
 [[ -f "${GSM8K_MODERN_DIR}/test.parquet" ]] || sol_fail "Missing ${GSM8K_MODERN_DIR}/test.parquet. Run scripts/sol/prepare_gsm8k_modern.sh first."
@@ -100,7 +120,7 @@ if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then
 fi
 
 cmd=(
-  "$(sol_python)" -m verl.trainer.main_ppo
+  "${PYTHON_BIN}" -m verl.trainer.main_ppo
   "algorithm.adv_estimator=gdpo"
   "algorithm.gdpo_baseline_mode=${GSM8K_MODERN_GDPO_BASELINE_MODE:-upstream}"
   "algorithm.gdpo_reward_keys=[\"correct_reward\",\"format_reward\"]"
@@ -179,6 +199,38 @@ fi
 
 if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then
   cmd+=("trainer.rollout_data_dir=${ROLLOUT_DATA_DIR}")
+fi
+
+if (( DRY_RUN )); then
+  sol_msg "Dry-run only. No Slurm allocation is required and no training will start."
+  sol_print_named_variables \
+    "Resolved GSM8K fit variables" \
+    RUN_TAG \
+    EXPERIMENT_NAME \
+    PROJECT_NAME \
+    MODEL_PATH \
+    RUN_ROOT \
+    LOCAL_CKPT_DIR \
+    TENSORBOARD_DIR \
+    VERL_FILE_LOGGER_PATH \
+    GDPO_SATURATION_EVENT_LOG_PATH \
+    ROLLOUT_DATA_DIR \
+    GSM8K_MODERN_DIR \
+    N_GPUS_PER_NODE \
+    NNODES \
+    TOTAL_GPUS \
+    ROLLOUT_N \
+    PPO_MINI_BATCH_SIZE \
+    NORMALIZED_PPO_MINI_BATCH_SIZE \
+    ACTOR_PPO_MICRO_BATCH_SIZE \
+    ROLLOUT_LOGPROB_MICRO_BATCH_SIZE \
+    REF_LOGPROB_MICRO_BATCH_SIZE \
+    RUNTIME_PROFILE \
+    RUN_CLASSIFICATION
+  sol_msg "Post-run audit: ${POST_RUN_AUDIT_CMD}"
+  sol_msg "Resolved trainer command:"
+  sol_shell_quote_command "${cmd[@]}" "$@"
+  exit 0
 fi
 
 "${cmd[@]}" "$@"

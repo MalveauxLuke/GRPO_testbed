@@ -178,6 +178,10 @@ sol_ensure_upstream_checkout() {
 }
 
 sol_ensure_runtime_dirs() {
+  if [[ "${SOL_DRY_RUN_ONLY:-0}" == "1" ]]; then
+    return 0
+  fi
+
   mkdir -p \
     "${EXTERNAL_ROOT}" \
     "${DATA_ROOT}" \
@@ -216,12 +220,16 @@ sol_prepare_tracking_paths() {
   export TENSORBOARD_DIR="${TENSORBOARD_DIR:-${TENSORBOARD_ROOT}/${project_name}/${experiment_name}/${run_tag}}"
   export VERL_FILE_LOGGER_PATH="${VERL_FILE_LOGGER_PATH:-${FILE_LOG_ROOT}/${project_name}/${experiment_name}/${run_tag}.jsonl}"
 
-  mkdir -p "${TENSORBOARD_DIR}" "$(dirname "${VERL_FILE_LOGGER_PATH}")"
+  if [[ "${SOL_DRY_RUN_ONLY:-0}" != "1" ]]; then
+    mkdir -p "${TENSORBOARD_DIR}" "$(dirname "${VERL_FILE_LOGGER_PATH}")"
+  fi
 }
 
 sol_prepare_gdpo_saturation_event_log_path() {
   export GDPO_SATURATION_EVENT_LOG_PATH="${GDPO_SATURATION_EVENT_LOG_PATH:-${VERL_FILE_LOGGER_PATH%.jsonl}.gdpo_saturation_events.jsonl}"
-  mkdir -p "$(dirname "${GDPO_SATURATION_EVENT_LOG_PATH}")"
+  if [[ "${SOL_DRY_RUN_ONLY:-0}" != "1" ]]; then
+    mkdir -p "$(dirname "${GDPO_SATURATION_EVENT_LOG_PATH}")"
+  fi
 }
 
 sol_require_runtime_profile() {
@@ -316,6 +324,23 @@ sol_log_batch_math() {
   sol_msg "Batch math: total_gpus=${total_gpus}, rollout.n=${rollout_n}, actor.ppo_mini_batch_size=${ppo_mini_batch_size}"
   sol_msg "Normalized actor mini-batch after rollout/GPU split: ${normalized_mini_batch}"
   sol_msg "Per-GPU micro-batches: actor=${actor_micro_batch}, rollout_logprob=${rollout_micro_batch}, ref_logprob=${ref_micro_batch}"
+}
+
+sol_shell_quote_command() {
+  printf '%q ' "$@"
+  printf '\n'
+}
+
+sol_print_named_variables() {
+  local label="${1:-Resolved variables}"
+  shift || true
+  sol_msg "${label}"
+  local variable_name
+  for variable_name in "$@"; do
+    if [[ -n "${!variable_name+x}" ]]; then
+      printf '[sol-setup]   %s=%q\n' "${variable_name}" "${!variable_name}"
+    fi
+  done
 }
 
 sol_start_resource_sampler() {

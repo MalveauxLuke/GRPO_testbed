@@ -16,6 +16,12 @@ if [[ -z "${ADV_ESTIMATOR}" || -z "${PROFILE}" ]]; then
 fi
 shift 2
 
+DRY_RUN=0
+if [[ "${1:-}" == "--dry-run" ]]; then
+  DRY_RUN=1
+  shift
+fi
+
 case "${ADV_ESTIMATOR}" in
   grpo|gdpo) ;;
   *)
@@ -36,10 +42,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/common_env.sh"
 
-sol_require_slurm_allocation
 sol_ensure_runtime_dirs
 sol_ensure_upstream_checkout
-sol_activate_env
+if (( ! DRY_RUN )); then
+  sol_require_slurm_allocation
+fi
+export SOL_DRY_RUN_ONLY="${DRY_RUN}"
+
+PYTHON_BIN=""
+if (( DRY_RUN )); then
+  if [[ -d "/scratch" && -w "/scratch" ]] && sol_activate_env >/dev/null 2>&1; then
+    PYTHON_BIN="$(sol_python)"
+  else
+    PYTHON_BIN="<run 'source scripts/sol/common_env.sh && sol_activate_env' to resolve python>"
+  fi
+else
+  sol_activate_env
+  PYTHON_BIN="$(sol_python)"
+fi
 
 case "${PROFILE}" in
   debug)
@@ -165,7 +185,7 @@ if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then
 fi
 
 cmd=(
-  "$(sol_python)" -m verl.trainer.main_ppo
+  "${PYTHON_BIN}" -m verl.trainer.main_ppo
   "algorithm.adv_estimator=${ADV_ESTIMATOR}"
   "trainer.val_before_train=False"
   "data.train_files=${DATASET_DIR}/train.parquet"
@@ -251,6 +271,41 @@ fi
 
 if [[ -n "${ROLLOUT_DATA_DIR}" ]]; then
   cmd+=("trainer.rollout_data_dir=${ROLLOUT_DATA_DIR}")
+fi
+
+if (( DRY_RUN )); then
+  sol_msg "Dry-run only. No Slurm allocation is required and no training will start."
+  sol_print_named_variables \
+    "Resolved math-length variables" \
+    ADV_ESTIMATOR \
+    PROFILE \
+    RUN_TAG \
+    EXPERIMENT_NAME \
+    PROJECT_NAME \
+    MODEL_PATH \
+    DATASET_DIR \
+    LENGTH_LIMIT_TOKENS \
+    RUN_ROOT \
+    LOCAL_CKPT_DIR \
+    TENSORBOARD_DIR \
+    VERL_FILE_LOGGER_PATH \
+    GDPO_SATURATION_EVENT_LOG_PATH \
+    ROLLOUT_DATA_DIR \
+    N_GPUS_PER_NODE \
+    NNODES \
+    TOTAL_GPUS \
+    ROLLOUT_N \
+    PPO_MINI_BATCH_SIZE \
+    NORMALIZED_PPO_MINI_BATCH_SIZE \
+    PPO_MICRO_BATCH_SIZE \
+    ROLLOUT_LOGPROB_MICRO_BATCH_SIZE \
+    REF_LOGPROB_MICRO_BATCH_SIZE \
+    RUNTIME_PROFILE \
+    RUN_CLASSIFICATION
+  sol_msg "Post-run audit: ${POST_RUN_AUDIT_CMD}"
+  sol_msg "Resolved trainer command:"
+  sol_shell_quote_command "${cmd[@]}" "$@"
+  exit 0
 fi
 
 "${cmd[@]}" "$@"
