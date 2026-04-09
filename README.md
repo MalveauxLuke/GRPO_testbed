@@ -20,6 +20,7 @@ The main reference docs are:
 - [docs/workflows/math.md](/Users/god/Documents/VERL_GRPO/docs/workflows/math.md)
 - [docs/reference/runtime.md](/Users/god/Documents/VERL_GRPO/docs/reference/runtime.md)
 - [docs/reference/config-knobs.md](/Users/god/Documents/VERL_GRPO/docs/reference/config-knobs.md)
+- [docs/reference/gdpo-advantage-verification.md](/Users/god/Documents/VERL_GRPO/docs/reference/gdpo-advantage-verification.md)
 - [docs/reference/troubleshooting.md](/Users/god/Documents/VERL_GRPO/docs/reference/troubleshooting.md)
 - [docs/reference/repo-map.md](/Users/god/Documents/VERL_GRPO/docs/reference/repo-map.md)
 

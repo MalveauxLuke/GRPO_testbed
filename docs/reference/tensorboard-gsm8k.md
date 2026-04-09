@@ -13,6 +13,10 @@ The main use case is the current 75-step saturation-check run with:
   - `correct_reward`
   - `format_reward`
 
+Exact metric glossary and proof harness:
+
+- [gdpo-advantage-verification.md](/Users/god/Documents/VERL_GRPO/docs/reference/gdpo-advantage-verification.md)
+
 ## Start TensorBoard
 
 For the current 75-step run:

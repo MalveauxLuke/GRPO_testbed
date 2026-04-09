@@ -76,6 +76,7 @@ bash scripts/sol/start_tensorboard_gsm8k_modern_current.sh both 6006
 
 Focused guide for the current capped/full GSM8K runs:
 - [tensorboard-gsm8k.md](/Users/god/Documents/VERL_GRPO/docs/reference/tensorboard-gsm8k.md)
+- [gdpo-advantage-verification.md](/Users/god/Documents/VERL_GRPO/docs/reference/gdpo-advantage-verification.md)
 
 If you want the raw command:
 
@@ -104,6 +105,13 @@ Sample rollouts:
 ```bash
 cd ~/GRPO_testbed
 bash scripts/sol/sample_gsm8k_modern_rollouts.sh "$ROLLDIR"
+```
+
+Print one full mixed-correctness rollout group, for example a group with all but one sample correct:
+
+```bash
+cd ~/GRPO_testbed
+python scripts/sol/print_gsm8k_modern_rollout_group.py --input-path "$ROLLDIR" --group-size 4
 ```
 
 Only mismatches:
