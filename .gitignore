@@ -3,3 +3,6 @@ __pycache__/
 .ruff_cache/
 slurm-*.out
 slurm-*.err
+aime_divergence/outputs/*.json
+aime_divergence/outputs/*.jsonl
+aime_divergence/outputs/*/

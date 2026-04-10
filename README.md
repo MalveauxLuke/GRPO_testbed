@@ -18,6 +18,7 @@ The main reference docs are:
 - [docs/getting-started/sol.md](/Users/god/Documents/VERL_GRPO/docs/getting-started/sol.md)
 - [docs/workflows/gsm8k.md](/Users/god/Documents/VERL_GRPO/docs/workflows/gsm8k.md)
 - [docs/workflows/math.md](/Users/god/Documents/VERL_GRPO/docs/workflows/math.md)
+- [aime_divergence/README.md](/Users/god/Documents/VERL_GRPO/aime_divergence/README.md)
 - [docs/reference/runtime.md](/Users/god/Documents/VERL_GRPO/docs/reference/runtime.md)
 - [docs/reference/config-knobs.md](/Users/god/Documents/VERL_GRPO/docs/reference/config-knobs.md)
 - [docs/reference/gdpo-advantage-verification.md](/Users/god/Documents/VERL_GRPO/docs/reference/gdpo-advantage-verification.md)
