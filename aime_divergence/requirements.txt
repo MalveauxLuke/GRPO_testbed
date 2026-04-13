@@ -2,5 +2,5 @@ vllm
 torch
 datasets
 math-verify
-transformers
+transformers[hf_xet]>=4.51.0,<5.0
 tensorboard

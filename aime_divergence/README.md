@@ -49,21 +49,33 @@ cd ~/GRPO_testbed
 sbatch aime_divergence/run_debug.sbatch
 ```
 
-For a short smoke test first:
+For a short debug smoke first, use the same debug launcher with smaller limits:
 
 ```bash
 cd ~/GRPO_testbed
-sbatch aime_divergence/run_smoke.sbatch
+AIME_DIVERGENCE_MAX_PROBLEMS=2 \
+AIME_DIVERGENCE_SAMPLES=2 \
+AIME_DIVERGENCE_MAX_TOKENS=2048 \
+AIME_DIVERGENCE_MAX_MODEL_LEN=4096 \
+  sbatch aime_divergence/run_debug.sbatch
 ```
 
-The smoke job uses the same code path as the full debug run, but defaults to:
+For the token-logged pipeline smoke test:
+
+```bash
+cd ~/GRPO_testbed
+sbatch aime_divergence/run_logged_smoke.sbatch
+```
+
+The token-logged smoke job uses the same code path as the full logged run, but defaults to:
 
 - first `2` loaded AIME problems
 - `2` rollouts per problem
 - `2048` max generated tokens
 - `4096` max model length
-- `30` minute Slurm limit
+- `1` hour Slurm limit
 - TensorBoard enabled
+- manual resume testing is still recommended if you want to exercise checkpoint recovery explicitly
 
 The sbatch reuses the repo SOL setup:
 
@@ -71,6 +83,8 @@ The sbatch reuses the repo SOL setup:
 - scratch cache env vars
 - `verl-grpo-sol` mamba environment
 - scratch Slurm logs under `/scratch/$USER/verl-grpo/logs`
+- `VLLM_ATTENTION_BACKEND=FLASH_ATTN` to avoid FlashInfer attention backend issues on SOL
+- `VLLM_USE_FLASHINFER_SAMPLER=0` because vLLM V1 can still route top-k/top-p sampling through FlashInfer unless explicitly disabled
 
 The default output path is:
 
@@ -85,15 +99,59 @@ AIME_DIVERGENCE_OUTPUT_PATH=/scratch/$USER/verl-grpo/outputs/aime_divergence/man
   sbatch aime_divergence/run_debug.sbatch
 ```
 
-Useful smoke/debug overrides:
+## Logged Rollouts
+
+The logged pipeline keeps the same prompting, datasets, extraction, and summary
+behavior as the debug run, but also stores one compressed `.npz` per problem
+with token ids, sampled-token probabilities, ranks, top-k probabilities, and
+approximate entropy.
+
+Run the full logged pipeline on SOL with:
 
 ```bash
-AIME_DIVERGENCE_MAX_PROBLEMS=2 \
-AIME_DIVERGENCE_SAMPLES=2 \
-AIME_DIVERGENCE_MAX_TOKENS=2048 \
-AIME_DIVERGENCE_MAX_MODEL_LEN=4096 \
-  sbatch aime_divergence/run_debug.sbatch
+cd ~/GRPO_testbed
+sbatch aime_divergence/run_logged.sbatch
 ```
+
+Or locally/in an active env:
+
+```bash
+cd ~/GRPO_testbed
+source scripts/sol/common_env.sh
+sol_activate_env
+export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+export VLLM_USE_FLASHINFER_SAMPLER=0
+python -m aime_divergence.run_logged --output-dir aime_divergence/outputs/logged_manual
+```
+
+If you want development-time strictness instead of the default continue-on-error
+behavior, add:
+
+```bash
+python -m aime_divergence.run_logged --output-dir aime_divergence/outputs/logged_manual --fail-fast
+```
+
+Logged output layout:
+
+```text
+outputs/aime_divergence/logged_<timestamp>/
+├── config.json
+├── rollout_results.json
+├── run_summary.txt
+├── tensorboard/
+└── token_data/
+    ├── aime24_01.npz
+    ├── ...
+    └── aime25_30.npz
+```
+
+Checkpointing/resume rules:
+
+- generation runs one problem at a time
+- `token_data/<problem_id>.npz` plus the internal checkpoint manifest determine completion
+- if a problem has token data but no checkpoint row, the run regenerates it
+- rerunning the same output dir resumes from completed problems
+- token-level analysis is intentionally out of scope for this pipeline; the run only logs and stores artifacts
 
 ## TensorBoard
 
@@ -122,6 +180,8 @@ Useful tags:
 cd ~/GRPO_testbed
 source scripts/sol/common_env.sh
 sol_activate_env
+export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+export VLLM_USE_FLASHINFER_SAMPLER=0
 python -m aime_divergence.run_debug
 ```
 

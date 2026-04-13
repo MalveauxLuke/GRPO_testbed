@@ -20,6 +20,9 @@ PYTHON_BIN="$(sol_python)" USE_MEGATRON=0 USE_SGLANG=0 bash scripts/install_vllm
 sol_msg "Installing AIME/debug analysis helpers."
 "$(sol_python)" -m pip install "math-verify" "tensorboard"
 
+sol_msg "Pinning Transformers below 5.x for vLLM tokenizer compatibility."
+"$(sol_python)" -m pip install "transformers[hf_xet]>=4.51.0,<5.0"
+
 sol_msg "Repairing NumPy to the upstream verl-supported range for SOL."
 "$(sol_python)" -m pip install "numpy>=1.26,<2.0"
 
