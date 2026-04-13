@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 DEFAULT_MODEL = "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
-DEFAULT_LOGPROBS = 50
+DEFAULT_LOGPROBS = 20
 CHAT_TEMPLATE = "User: \n {question} \n Please reason step by step, and put your final answer within \\boxed{{}}. \n \n Assistant:"
 
 

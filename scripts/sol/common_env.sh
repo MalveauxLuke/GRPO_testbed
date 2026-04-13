@@ -118,12 +118,31 @@ sol_prepend_env_bin_to_path() {
   fi
 }
 
+sol_prepend_env_lib_to_ld_library_path() {
+  local lib_dir
+  for lib_dir in "${CONDA_PREFIX:-}/lib" "${CONDA_PREFIX:-}/lib64"; do
+    if [[ -n "${CONDA_PREFIX:-}" && -d "${lib_dir}" ]]; then
+      case ":${LD_LIBRARY_PATH:-}:" in
+        *":${lib_dir}:"*) ;;
+        *)
+          if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+            export LD_LIBRARY_PATH="${lib_dir}:${LD_LIBRARY_PATH}"
+          else
+            export LD_LIBRARY_PATH="${lib_dir}"
+          fi
+          ;;
+      esac
+    fi
+  done
+}
+
 sol_activate_env() {
   sol_load_mamba
   sol_deactivate_base_if_needed
   # shellcheck disable=SC1091
   source activate "${SOL_ENV_NAME}" || sol_fail "Could not activate Mamba env '${SOL_ENV_NAME}'. Run scripts/sol/create_env.sh first."
   sol_prepend_env_bin_to_path
+  sol_prepend_env_lib_to_ld_library_path
   sol_normalize_gpu_visibility_env
 }
 

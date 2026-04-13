@@ -73,6 +73,7 @@ The token-logged smoke job uses the same code path as the full logged run, but d
 - `2` rollouts per problem
 - `2048` max generated tokens
 - `4096` max model length
+- `20` token logprobs per generated position
 - `1` hour Slurm limit
 - TensorBoard enabled
 - manual resume testing is still recommended if you want to exercise checkpoint recovery explicitly
@@ -103,7 +104,7 @@ AIME_DIVERGENCE_OUTPUT_PATH=/scratch/$USER/verl-grpo/outputs/aime_divergence/man
 
 The logged pipeline keeps the same prompting, datasets, extraction, and summary
 behavior as the debug run, but also stores one compressed `.npz` per problem
-with token ids, sampled-token probabilities, ranks, top-k probabilities, and
+with token ids, sampled-token probabilities, ranks, top-20 probabilities, and
 approximate entropy.
 
 Run the full logged pipeline on SOL with:
@@ -151,6 +152,7 @@ Checkpointing/resume rules:
 - `token_data/<problem_id>.npz` plus the internal checkpoint manifest determine completion
 - if a problem has token data but no checkpoint row, the run regenerates it
 - rerunning the same output dir resumes from completed problems
+- the current repo defaults log `20` token probabilities per generated position to match the active SOL vLLM limit
 - token-level analysis is intentionally out of scope for this pipeline; the run only logs and stores artifacts
 
 ## TensorBoard
